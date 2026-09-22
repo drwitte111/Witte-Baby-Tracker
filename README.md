@@ -149,9 +149,13 @@ needs a server to send it, so nothing here depends on it.
 
 ## Deploying to GitHub Pages
 
-Settings → Pages → deploy from branch, pick the branch and `/` (root). `.nojekyll` is already
-present so the `js/` directory is served as-is. The service worker caches the shell under the
-scope it is served from, so a project page (`/Witte-Baby-Tracker/`) works without changes.
+**Settings → Pages → Source: GitHub Actions.** The workflow in `.github/workflows/pages.yml`
+deploys `main` on every push and stamps `version.json` with the commit. Installed apps poll that
+file whenever they come to the foreground and reload themselves when it changes, so an update
+lands on the phones within seconds of the next open — no reinstall, no cache clearing.
+
+Deploying from a branch still works, but without `version.json` the app can only pick up
+updates through the service worker's own checks, which iOS runs far less often.
 
 ## Layout
 
