@@ -47,9 +47,9 @@ function shiftStart(session, newStart, creditKey) {
 
 const earlierRow = (act, label) => `<div class="row adjust">
   <span class="adjust-label">${label}</span>
+  <button class="chip" data-act="${act}" data-min="1">−1m</button>
+  <button class="chip" data-act="${act}" data-min="2">−2m</button>
   <button class="chip" data-act="${act}" data-min="5">−5m</button>
-  <button class="chip" data-act="${act}" data-min="10">−10m</button>
-  <button class="chip" data-act="${act}" data-min="15">−15m</button>
   <button class="chip" data-act="${act}-set">${icon('i-clock')}Set time</button>
 </div>`;
 
@@ -273,7 +273,7 @@ function wire(root, ctx) {
         const s = bankSleep(ctx.state.activeSleep, now);
         await ctx.setActiveSleep(shiftStart(s, s.start - Number(btn.dataset.min) * 60000, 'elapsedSec'));
         ctx.refresh();
-        toast(`Start moved to ${time(ctx.state.activeSleep.start)}`);
+        toast(`Fell asleep ${time(ctx.state.activeSleep.start)} · ${dur((now - ctx.state.activeSleep.start) / 1000)} ago`);
         break;
       }
 
@@ -291,7 +291,7 @@ function wire(root, ctx) {
         const key = (s.beginSide || s.side) === 'LEFT' ? 'leftSec' : 'rightSec';
         await ctx.setActiveFeed(shiftStart(s, s.start - Number(btn.dataset.min) * 60000, key));
         ctx.refresh();
-        toast(`Start moved to ${time(ctx.state.activeFeed.start)}`);
+        toast(`Started ${time(ctx.state.activeFeed.start)} · ${dur((now - ctx.state.activeFeed.start) / 1000)} ago`);
         break;
       }
 
