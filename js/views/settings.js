@@ -71,6 +71,20 @@ export async function render(root, ctx) {
 
   ${syncCard()}
 
+  <section class="card tone-sleep">
+    <div class="card-head"><span class="chip-ico">${icon('i-clock')}</span><span class="card-title">Lock Screen widget</span>
+      <span class="meta">free · Scriptable</span></div>
+    <p class="sub">See who is asleep, for how long, and when the last feed was — on the Lock Screen
+      or Home Screen, with a live ticking timer. Uses the free Scriptable app.</p>
+    <ol class="steps">
+      <li>Install <b>Scriptable</b> from the App Store.</li>
+      <li>Tap <b>Copy widget script</b> below, open Scriptable, tap <b>+</b>, paste, name it <b>Witte Baby</b>.</li>
+      <li><b>Lock Screen:</b> long-press it → Customize → tap the widget row → Scriptable → pick a shape → choose the script.</li>
+      <li><b>Home Screen:</b> long-press → + → Scriptable → pick a size → Edit Widget → Script: Witte Baby.</li>
+    </ol>
+    <div class="row"><button class="btn tone wide" data-act="copy-widget">${icon('i-share', 'sm')}Copy widget script</button></div>
+  </section>
+
   <section class="card tone-neutral">
     <div class="card-head"><span class="chip-ico">${icon('i-home')}</span><span class="card-title">App</span></div>
     <p class="sub">Add to your home screen for a full-screen, offline-capable app: in Safari tap Share → Add to Home Screen; in Chrome use the install prompt in the address bar.</p>
@@ -188,6 +202,17 @@ export async function render(root, ctx) {
         const added = await ctx.addProfile(rec);
         await ctx.selectProfile(added.id);
         toast(`${added.name} added`);
+      }
+    }
+
+    if (act === 'copy-widget') {
+      try {
+        const src = await (await fetch(new URL('../../widget/witte-baby-widget.js', import.meta.url))).text();
+        await navigator.clipboard.writeText(src);
+        toast('Copied — now paste it into Scriptable');
+      } catch (err) {
+        console.error(err);
+        toast('Could not copy — open widget/witte-baby-widget.js in the repo instead');
       }
     }
 

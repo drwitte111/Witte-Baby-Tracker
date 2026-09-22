@@ -18,7 +18,9 @@ const SDK_VERSION = '12.19.0';
 const sdkBase = () => localStorage.getItem('firebaseSdkBase')
   || `https://www.gstatic.com/firebasejs/${SDK_VERSION}`;
 
-const SYNCED_META = ['profiles', 'current', 'units', 'profile'];   // shared across devices
+// Shared across devices. Running timers are included so a sleep started on one
+// phone shows (and can be stopped) on the other.
+const SYNCED_META = ['profiles', 'current', 'units', 'profile', 'activeSleep', 'activeFeed'];
 const PUSH_DEBOUNCE = 900;
 const BATCH = 400;
 
@@ -314,6 +316,7 @@ export async function pushNow() {
     }
 
     await pushMeta();
+    await publishStatus();
   } finally {
     pushing = false;
     if (pushAgain) { pushAgain = false; schedulePush(); }
@@ -332,6 +335,44 @@ async function pushMeta() {
     await db.metaSet(`${key}:updated`, dirtyAt);
     await db.metaSet(`${key}:dirty`, 0);
   }
+}
+
+/**
+ * One small document a widget can read with a single GET: the current baby,
+ * what is running, and the last feed / sleep / diaper. Derived from local
+ * data, so it is rewritten after every push and never needs a query.
+ */
+let statusJson = '';
+async function publishStatus() {
+  const { fs: F } = sdk;
+  const profiles = await db.metaGet('profiles', []);
+  const current = await db.metaGet('current', null);
+  const baby = profiles.find(p => p.id === current) || profiles[0] || null;
+  const [lastFeed, lastSleep, lastDiaper] = await Promise.all([
+    db.latest('breastfeed'), db.latest('sleep', e => !!e.end), db.latest('diaper'),
+  ]);
+  const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+  const today = await db.range(dayStart.getTime(), Date.now() + 1);
+  const pick = (ev, keys) => ev ? Object.fromEntries(keys.filter(k => ev[k] != null).map(k => [k, ev[k]])) : null;
+
+  const status = {
+    baby: baby ? { id: baby.id, name: baby.name, birth: baby.birth || null } : null,
+    activeSleep: await db.metaGet('activeSleep', null),
+    activeFeed: await db.metaGet('activeFeed', null),
+    lastFeed: pick(lastFeed, ['start', 'leftSec', 'rightSec', 'beginSide', 'endSide']),
+    lastSleep: pick(lastSleep, ['start', 'end', 'durationSec']),
+    lastDiaper: pick(lastDiaper, ['start', 'wet', 'dirty']),
+    today: {
+      feeds: today.filter(e => e.type === 'breastfeed').length,
+      diapers: today.filter(e => e.type === 'diaper').length,
+    },
+    updated: Date.now(),
+  };
+  const key = JSON.stringify({ ...status, updated: 0 });
+  if (key === statusJson) return;                  // nothing changed since last publish
+  statusJson = key;
+  await F.setDoc(F.doc(store, 'families', sync.family.id, 'meta', 'status'), defined(status));
+  debug('status published');
 }
 
 /** Call after changing a shared setting (profile, units) so it travels. */

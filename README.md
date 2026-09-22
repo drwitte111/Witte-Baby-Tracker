@@ -113,6 +113,25 @@ family when it is on (it says which).
 
 Personal exports are git-ignored; don't commit them.
 
+## Lock Screen / Home Screen widget
+
+iOS only lets native apps into the Dynamic Island and Live Activities. The free route to a
+glanceable timer is a **Scriptable** widget: [`widget/witte-baby-widget.js`](widget/witte-baby-widget.js)
+reads one small `meta/status` document the app keeps in Firestore and renders:
+
+- **Lock Screen rectangular:** "🌙 Asleep since 8:41 PM" with a live ticking timer, and the last feed
+- **Lock Screen inline** (next to the clock): "🌙 42:13 · 🍼 1 hr ago"
+- **Home Screen small / medium:** baby name, today's counts, sleep or feed state, last feed and diaper
+
+Timers tick live. The underlying data refreshes on Apple's widget schedule, roughly every 5–15
+minutes, so a state change on the other phone shows up within that window.
+
+**More → Lock Screen widget → Copy widget script**, then paste it into a new Scriptable script
+and add the widget. The script's only settings are `PROJECT` and `SPACE` at the top.
+
+The status document is rewritten by the app after every change; it is derived from local data,
+so it needs no Firestore query or index.
+
 ## On iPhone
 
 The app is tuned for iPhone 16 Pro on iOS 26, and degrades cleanly elsewhere.
