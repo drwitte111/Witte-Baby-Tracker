@@ -34,15 +34,32 @@ function done(request) {
   });
 }
 
+// Views and the sync engine both listen for local changes.
+const listeners = new Set();
+function emit(reason) { listeners.forEach(fn => { try { fn(reason); } catch {} }); }
+
 export const db = {
-  async put(ev) {
+  onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
+
+  // Let the sync engine announce changes it made outside of put/remove.
+  notify(reason = 'remote') { emit(reason); },
+
+  /**
+   * Local write. Stamps `updated` and marks the row dirty so the sync engine
+   * picks it up; pass {remote:true} for rows arriving from Firestore.
+   */
+  async put(ev, { remote = false } = {}) {
+    const row = remote
+      ? { ...ev, dirty: false }
+      : { ...ev, updated: Date.now(), dirty: true };
     const s = await tx('events', 'readwrite');
-    await done(s.put(ev));
-    return ev;
+    await done(s.put(row));
+    emit(remote ? 'remote' : 'local');
+    return row;
   },
 
   // Bulk insert in chunks so a 4k-row import stays inside one transaction each.
-  async putMany(list, onProgress) {
+  async putMany(list, onProgress, { remote = false } = {}) {
     const database = await open();
     const CHUNK = 500;
     for (let i = 0; i < list.length; i += CHUNK) {
@@ -50,34 +67,63 @@ export const db = {
       await new Promise((resolve, reject) => {
         const t = database.transaction('events', 'readwrite');
         const s = t.objectStore('events');
-        slice.forEach(ev => s.put(ev));
+        slice.forEach(ev => s.put(remote
+          ? { ...ev, dirty: false }
+          : { ...ev, updated: ev.updated || Date.now(), dirty: true }));
         t.oncomplete = resolve;
         t.onerror = () => reject(t.error);
       });
       if (onProgress) onProgress(Math.min(i + CHUNK, list.length), list.length);
     }
+    emit(remote ? 'remote' : 'local');
   },
 
-  async get(id) { return done((await tx('events', 'readonly')).get(id)); },
+  async get(id) {
+    const row = await done((await tx('events', 'readonly')).get(id));
+    return row && row.deleted ? null : row;
+  },
 
-  async remove(id) { return done((await tx('events', 'readwrite')).delete(id)); },
+  /**
+   * Deletes are tombstones, not removals: a hard delete on one phone would be
+   * invisible to the other, and the row would sync straight back.
+   */
+  async remove(id) {
+    const s = await tx('events', 'readwrite');
+    const row = await done(s.get(id));
+    if (!row) return;
+    await done(s.put({ ...row, deleted: true, updated: Date.now(), dirty: true }));
+    emit('local');
+  },
 
-  async clearEvents() { return done((await tx('events', 'readwrite')).clear()); },
+  async clearEvents() {
+    await done((await tx('events', 'readwrite')).clear());
+    emit('local');
+  },
 
-  async count() { return done((await tx('events', 'readonly')).count()); },
+  /** Tombstone every row, so the deletion reaches the other caregivers too. */
+  async tombstoneAll() {
+    const rows = (await this.allRaw()).filter(r => !r.deleted);
+    const now = Date.now();
+    await this.putMany(rows.map(r => ({ ...r, deleted: true, updated: now })));
+    return rows.length;
+  },
 
-  // All events, newest first.
+  async count() {
+    return (await this.all()).length;
+  },
+
+  // All live events, newest first.
   async all() {
     const s = await tx('events', 'readonly');
     const out = await done(s.index('by_start').getAll());
-    return out.reverse();
+    return out.reverse().filter(e => !e.deleted);
   },
 
-  // Events with start in [from, to), newest first.
+  // Live events with start in [from, to), newest first.
   async range(from, to) {
     const s = await tx('events', 'readonly');
     const out = await done(s.index('by_start').getAll(IDBKeyRange.bound(from, to, false, true)));
-    return out.reverse();
+    return out.reverse().filter(e => !e.deleted);
   },
 
   // Most recent event of a type (optionally matching a filter), newest first scan.
@@ -89,7 +135,7 @@ export const db = {
       req.onsuccess = () => {
         const c = req.result;
         if (!c) return resolve(null);
-        if (!match || match(c.value)) return resolve(c.value);
+        if (!c.value.deleted && (!match || match(c.value))) return resolve(c.value);
         c.continue();
       };
       req.onerror = () => reject(req.error);
@@ -100,8 +146,37 @@ export const db = {
     const s = await tx('events', 'readonly');
     const lo = from ?? -Infinity, hi = to ?? Infinity;
     const out = await done(s.index('by_type_start').getAll(IDBKeyRange.bound([type, lo], [type, hi])));
-    return out.reverse();
+    return out.reverse().filter(e => !e.deleted);
   },
+
+  /* ---- sync support ---- */
+
+  // Rows changed locally and not yet pushed (tombstones included).
+  async dirty(limit = Infinity) {
+    const s = await tx('events', 'readonly');
+    const all = await done(s.getAll());
+    const out = all.filter(e => e.dirty);
+    return limit === Infinity ? out : out.slice(0, limit);
+  },
+
+  async markClean(ids) {
+    const database = await open();
+    await new Promise((resolve, reject) => {
+      const t = database.transaction('events', 'readwrite');
+      const s = t.objectStore('events');
+      ids.forEach(id => {
+        const req = s.get(id);
+        req.onsuccess = () => { if (req.result) s.put({ ...req.result, dirty: false }); };
+      });
+      t.oncomplete = resolve;
+      t.onerror = () => reject(t.error);
+    });
+  },
+
+  // Raw row including tombstones — the sync engine needs to see those.
+  async raw(id) { return done((await tx('events', 'readonly')).get(id)); },
+
+  async allRaw() { return done((await tx('events', 'readonly')).getAll()); },
 
   async metaGet(key, fallback = null) {
     const row = await done((await tx('meta', 'readonly')).get(key));
@@ -110,6 +185,7 @@ export const db = {
 
   async metaSet(key, value) {
     await done((await tx('meta', 'readwrite')).put({ key, value }));
+    emit('meta');
     return value;
   },
 };

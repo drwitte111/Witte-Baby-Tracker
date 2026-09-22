@@ -4,6 +4,8 @@ import { fromNaraCsv, toNaraCsv } from '../csv.js';
 import { T } from '../model.js';
 import { esc, toast, confirm, download } from '../ui.js';
 import { toDateInput, ageFrom } from '../format.js';
+import { syncCard, wireSync } from './sync-ui.js';
+import { sync, pushNow } from '../sync.js';
 
 export async function render(root, ctx) {
   const count = await db.count();
@@ -42,7 +44,7 @@ export async function render(root, ctx) {
 
   <section class="card">
     <div class="card-head"><span class="card-title">Data</span><span class="muted">${count} entries</span></div>
-    <p class="sub">Everything stays on this device. Import your Nara Baby export to bring history across; export writes the same format back.</p>
+    <p class="sub">Import your Nara Baby export to bring history across; export writes the same format back. Without sync turned on, data stays on this device only.</p>
     <div class="row">
       <label class="btn" style="text-align:center;line-height:26px">Import CSV
         <input type="file" accept=".csv,text/csv" id="import-file" style="display:none">
@@ -53,11 +55,15 @@ export async function render(root, ctx) {
     <div class="row"><button class="btn danger wide" data-act="wipe">Delete all data</button></div>
   </section>
 
+  ${syncCard()}
+
   <section class="card">
     <div class="card-head"><span class="card-title">App</span></div>
     <p class="sub">Add to your home screen for a full-screen, offline-capable app: in Safari tap Share → Add to Home Screen; in Chrome use the install prompt in the address bar.</p>
     <p class="sub" style="margin-top:8px" id="storage-line"></p>
   </section>`;
+
+  wireSync(root, ctx);
 
   /* persistent storage: ask the browser not to evict the database */
   navigator.storage?.persisted?.().then(async persisted => {
@@ -150,9 +156,15 @@ export async function render(root, ctx) {
     }
 
     if (act === 'wipe') {
-      if (!await confirm(`Delete all ${await db.count()} entries from this device?`)) return;
+      const live = sync.state === 'live';
+      const n = await db.count();
+      if (!await confirm(live
+        ? `Delete all ${n} entries for everyone in ${sync.family?.name || 'the family'}?`
+        : `Delete all ${n} entries from this device?`)) return;
       if (!await confirm('This cannot be undone. Export first if you want a copy.')) return;
-      await db.clearEvents();
+      // While synced, a local wipe would just come back — delete for real instead.
+      if (live) { await db.tombstoneAll(); await pushNow(); }
+      else await db.clearEvents();
       await ctx.setActiveFeed(null);
       await ctx.setActiveSleep(null);
       toast('All data deleted');

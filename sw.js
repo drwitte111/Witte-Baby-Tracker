@@ -1,12 +1,12 @@
 // Cache-first shell so the app opens offline; the network refreshes it in the background.
-const CACHE = 'witte-baby-v1';
+const CACHE = 'witte-baby-v2';
 const SHELL = [
   './', './index.html', './assets/styles.css', './assets/icon.svg',
   './manifest.webmanifest',
   './js/app.js', './js/db.js', './js/ui.js', './js/model.js', './js/format.js',
-  './js/csv.js', './js/charts.js', './js/forms.js',
+  './js/csv.js', './js/charts.js', './js/forms.js', './js/sync.js',
   './js/views/home.js', './js/views/log.js', './js/views/stats.js',
-  './js/views/growth.js', './js/views/settings.js',
+  './js/views/growth.js', './js/views/settings.js', './js/views/sync-ui.js',
 ];
 
 self.addEventListener('install', e => {
