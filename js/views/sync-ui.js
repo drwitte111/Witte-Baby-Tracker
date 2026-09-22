@@ -30,7 +30,7 @@ export function syncCard() {
         New entries appear on the other phone within a second or two, and anything logged with no
         signal uploads when you are back.</p>
       <p class="sub">${sync.pending ? `${sync.pending} change${sync.pending === 1 ? '' : 's'} waiting to upload`
-        : sync.lastSync ? `Up to date · last synced ${esc(ago(sync.lastSync))}` : 'Up to date'}</p>
+        : sync.lastSync ? `Up to date · last change ${esc(ago(sync.lastSync))}` : 'Up to date'}</p>
       ${usageLine()}
       ${sync.throttled ? `<p class="banner">This phone hit its daily ${sync.throttled === 'writes' ? 'upload' : 'download'} allowance
         (kept well under Firebase's free tier). ${sync.throttled === 'writes' ? 'Entries are saved here and upload' : 'Syncing resumes'} after midnight — nothing is lost.</p>` : ''}
@@ -96,7 +96,7 @@ export function syncCard() {
       body = `<p class="sub"><b>${esc(sync.family?.name || 'Family')}</b> · ${members.length}
         caregiver${members.length === 1 ? '' : 's'}: ${esc(members.map(m => m.name || m.email).join(', '))}</p>
         <p class="sub">${sync.pending ? `${sync.pending} change${sync.pending === 1 ? '' : 's'} waiting to upload`
-          : sync.lastSync ? `Up to date · last synced ${esc(ago(sync.lastSync))}` : 'Up to date'}</p>
+          : sync.lastSync ? `Up to date · last change ${esc(ago(sync.lastSync))}` : 'Up to date'}</p>
         ${sync.error ? `<p class="banner">${esc(sync.error)}</p>` : ''}
         <div class="row">
           <button class="btn primary" data-sync="invite">Invite caregiver</button>
