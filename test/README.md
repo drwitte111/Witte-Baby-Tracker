@@ -6,7 +6,7 @@ Both suites run against the Firebase emulators — no real project, no cost, no 
 
 ```bash
 npm install --no-save firebase@12 firebase-tools@15      # not committed
-firebase emulators:start --project demo-witte --only firestore
+firebase emulators:start --project witte-baby-tracker --only firestore
 ```
 
 For the browser suite, serve the app and give it a local copy of the SDK

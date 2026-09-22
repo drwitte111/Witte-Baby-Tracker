@@ -1,7 +1,7 @@
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
 const CSV = '/root/.claude/uploads/cf815e03-f7e5-5f24-a6b7-f1485f8a4a45/65328401-export_narababy_nadine_20260922.csv';
 const CFG = `{ apiKey: "demo-key", authDomain: "127.0.0.1", projectId: "demo-witte", appId: "1:1:web:1" }`;
-await fetch('http://127.0.0.1:8080/emulator/v1/projects/demo-witte/databases/(default)/documents', { method: 'DELETE' });
+await fetch('http://127.0.0.1:8080/emulator/v1/projects/witte-baby-tracker/databases/(default)/documents', { method: 'DELETE' });
 const browser = await chromium.launch();
 const errors = [];
 const iPhone = { viewport: { width: 402, height: 874 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true,
@@ -20,7 +20,7 @@ async function phone(label) {
   p.on('console', m => { const t = m.text();
     if (t.startsWith('[sync]')) console.log(`[${label}]`, t.slice(0, 120));
     else if (m.type() === 'error' && !/ERR_INTERNET_DISCONNECTED/.test(t)) errors.push(`[${label}] ${t.slice(0,160)}`); });
-  await p.goto('http://127.0.0.1:8099/', { waitUntil: 'networkidle' });
+  await p.goto('http://127.0.0.1:8099/', { waitUntil: 'domcontentloaded' }); // a live Firestore stream means the network is never idle
   p._ctx = c; return p;
 }
 const stats = p => p.evaluate(() => new Promise(res => {
@@ -37,12 +37,9 @@ async function until(p, test, label, timeout = 240000) {
   console.log(`TIMEOUT ${label}; last`, JSON.stringify(await stats(p)));
   return -1;
 }
-async function connect(p) {
-  await p.tap('[data-route="settings"]'); await p.waitForTimeout(500);
-  await p.fill('#sync-card [name="cfg"]', CFG);
-  await p.click('[data-sync="save-config"]');
-  await p.waitForLoadState('networkidle'); await p.waitForTimeout(2500);
-}
+// Nothing to do: the project is baked into assets/firebase-config.js, so a
+// phone is connected the moment it opens the page.
+async function connect(p) { await p.waitForTimeout(3000); }
 
 // Phone A: has the Nara history, connects, uploads. No accounts anywhere.
 const A = await phone('A');
