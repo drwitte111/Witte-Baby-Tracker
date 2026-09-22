@@ -91,9 +91,9 @@ export async function render(root, ctx) {
   if (!sleeping) {
     const finished = lastSleep;
     cards.push(`<section class="card">
-      <div class="card-head"><span class="card-title">Awake since</span>
-        ${finished ? `<span class="muted">${esc(time(finished.end))}</span>` : ''}</div>
-      <div class="since" data-live="wake-since" data-start="${finished ? finished.end : ''}">${finished ? ago(finished.end, now) : 'No sleep logged'}</div>
+      <div class="card-head"><span class="card-title">Awake for</span>
+        ${finished ? `<span class="muted">up since ${esc(time(finished.end))}</span>` : ''}</div>
+      <div class="since" data-live="wake-since" data-mode="elapsed" data-start="${finished ? finished.end : ''}">${finished ? dur((now - finished.end) / 1000) : 'No sleep logged'}</div>
       ${finished ? `<p class="sub">Last sleep ${dur(sleepSeconds(finished))}</p>` : ''}
       <div class="row">
         <button class="btn primary" data-act="sleep-start">Start sleep</button>
@@ -149,7 +149,10 @@ function tick(root, ctx) {
   for (const key of ['feed-since', 'wake-since', 'diaper-since']) {
     const el = root.querySelector(`[data-live="${key}"]`);
     const start = el && el.dataset.start;
-    if (start) el.textContent = ago(Number(start), now);
+    if (!start) continue;
+    el.textContent = el.dataset.mode === 'elapsed'
+      ? dur((now - Number(start)) / 1000)
+      : ago(Number(start), now);
   }
 }
 
