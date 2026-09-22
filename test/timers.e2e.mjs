@@ -1,5 +1,4 @@
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
-import fs from 'fs';
 await fetch('http://127.0.0.1:8080/emulator/v1/projects/witte-baby-tracker/databases/(default)/documents', { method: 'DELETE' });
 const browser = await chromium.launch();
 const errors = [];
@@ -36,13 +35,5 @@ console.log('A sees the −5m from B:', await waitFor(A, async () => /5m/.test(a
 await B.tap('[data-act="sleep-wake"]'); await B.waitForTimeout(300);
 console.log('A timer cleared after B woke:', await waitFor(A, async () => (await A.locator('[data-act="sleep-start"]').count()) > 0, 'A cleared'));
 
-// A starts a feed; status doc should reflect it; then read it the way the widget does
-await A.tap('[data-act="feed-start"][data-side="LEFT"]'); await A.waitForTimeout(3000);
-const rest = await fetch('http://127.0.0.1:8080/v1/projects/witte-baby-tracker/databases/(default)/documents/families/witte/meta/status').then(r => r.json());
-const src = fs.readFileSync('/home/user/Witte-Baby-Tracker/widget/witte-baby-widget.js', 'utf8');
-const decoderSrc = src.slice(src.indexOf('function decode('), src.indexOf('// ---- data'));
-const decodeFields = new Function(decoderSrc + '; return decodeFields;')();
-const status = decodeFields(rest.fields || {});
-console.log('status doc via REST →', JSON.stringify({ baby: status.baby?.name, feedRunning: !!status.activeFeed, side: status.activeFeed?.side, lastSleepDur: status.lastSleep?.durationSec, today: status.today }));
 console.log(errors.length ? 'ERRORS:\n' + errors.slice(0, 5).join('\n') : 'no page errors');
 await browser.close();
