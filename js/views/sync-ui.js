@@ -1,8 +1,9 @@
 // The Sync card on the More screen: project config, account, family, invites.
-import { sync, onSyncChange, setConfig, clearConfig, parseConfig, isBaked, needsSignIn,
+import { sync, onSyncChange, setConfig, clearConfig, parseConfig, isBaked, needsSignIn, budget, QUOTA,
          signUp, signIn, signOutNow, createFamily, joinFamily, uploadEverything,
          createInvite, revokeInvites, pushNow, init as initSync } from '../sync.js';
 import { esc, icon, toast, confirm, sheet } from '../ui.js';
+import { db } from '../db.js';
 import { ago } from '../format.js';
 
 const STATUS = {
@@ -28,6 +29,9 @@ export function syncCard() {
         signal uploads when you are back.</p>
       <p class="sub">${sync.pending ? `${sync.pending} change${sync.pending === 1 ? '' : 's'} waiting to upload`
         : sync.lastSync ? `Up to date · last synced ${esc(ago(sync.lastSync))}` : 'Up to date'}</p>
+      ${usageLine()}
+      ${sync.throttled ? `<p class="banner">This phone hit its daily ${sync.throttled === 'writes' ? 'upload' : 'download'} allowance
+        (kept well under Firebase's free tier). ${sync.throttled === 'writes' ? 'Entries are saved here and upload' : 'Syncing resumes'} after midnight — nothing is lost.</p>` : ''}
       ${sync.error ? `<p class="banner">${esc(sync.error)}</p>` : ''}
       <div class="row">
         <button class="btn tone" data-sync="push">${icon('i-cloud', 'sm')}Sync now</button>
@@ -106,6 +110,14 @@ export function syncCard() {
       <span class="meta">${s.dot} ${esc(s.text)}</span></div>
     ${body}
   </section>`;
+}
+
+function usageLine() {
+  const b = budget();
+  const pct = Math.max(b.reads / QUOTA.reads, b.writes / QUOTA.writes) * 100;
+  return `<p class="sub usage"><span class="muted">Firebase today · this phone:</span>
+    ${b.reads.toLocaleString()} reads · ${b.writes.toLocaleString()} writes
+    <span class="muted">(free tier ${QUOTA.reads.toLocaleString()} / ${QUOTA.writes.toLocaleString()} a day · ${pct < 1 ? 'under 1' : pct.toFixed(0)}% used)</span></p>`;
 }
 
 /** Re-render just the sync card in place, so typing elsewhere is not disturbed. */
@@ -204,14 +216,16 @@ export function wireSync(root, ctx) {
           toast('Synced');
           break;
 
-        case 'reupload':
-          if (!await confirm('Send every entry on this phone to the shared log again?',
+        case 'reupload': {
+          const n = await db.count();
+          if (!await confirm(`Send all ${n.toLocaleString()} entries on this phone again? That is ${n.toLocaleString()} writes of the ${QUOTA.writes.toLocaleString()} a day Firebase allows for free; anything over this phone's share waits for midnight.`,
                              { danger: false, okLabel: 'Upload' })) return;
           busy(true);
           await uploadEverything();
           await pushNow();
           toast('Uploaded');
           break;
+        }
       }
     } catch (err) {
       console.error(err);

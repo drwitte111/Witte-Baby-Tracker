@@ -21,6 +21,45 @@ const sdkBase = () => localStorage.getItem('firebaseSdkBase')
 // Shared across devices. Running timers are included so a sleep started on one
 // phone shows (and can be stopped) on the other.
 const SYNCED_META = ['profiles', 'current', 'units', 'profile', 'activeSleep', 'activeFeed'];
+
+/**
+ * Free-tier guard. Firestore's Spark plan allows 50,000 reads and 20,000
+ * writes per project per day. Two phones share that, so each phone stops at
+ * well under half and resumes after midnight — dirty rows simply wait, and
+ * nothing is lost. Normal use is ~25 of each per day; the caps exist for the
+ * one-off cases (a 4,000-row import, a repeated re-upload, a bug).
+ */
+export const QUOTA = { reads: 50000, writes: 20000 };
+const cap = key => Number(localStorage.getItem(`sync${key}Cap`)) || (key === 'Write' ? 9000 : 22000);
+const dayKey = () => { const d = new Date(); return `usage:${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
+let usage = { reads: 0, writes: 0, day: dayKey() };
+
+async function loadUsage() {
+  const stored = await db.metaGet(dayKey(), null);
+  usage = stored ? { ...stored, day: dayKey() } : { reads: 0, writes: 0, day: dayKey() };
+  announce({ usage: { ...usage } });
+}
+async function count(kind, n) {
+  if (usage.day !== dayKey()) await loadUsage();                 // midnight rolled over
+  usage[kind] += n;
+  await db.metaSet(dayKey(), { reads: usage.reads, writes: usage.writes });
+  announce({ usage: { ...usage } });
+}
+const writesLeft = () => Math.max(0, cap('Write') - usage.writes);
+const readsLeft = () => Math.max(0, cap('Read') - usage.reads);
+export function budget() { return { ...usage, writeCap: cap('Write'), readCap: cap('Read') }; }
+
+function msToMidnight() { const d = new Date(); d.setHours(24, 0, 5, 0); return d.getTime() - Date.now(); }
+let resumeTimer = null;
+function resumeAfterMidnight() {
+  clearTimeout(resumeTimer);
+  resumeTimer = setTimeout(async () => {
+    await loadUsage();
+    announce({ throttled: '' });
+    if (sync.state === 'live' && !unsubEvents) startStreams(sync.family.id);
+    schedulePush();
+  }, msToMidnight());
+}
 const PUSH_DEBOUNCE = 900;
 const BATCH = 400;
 
@@ -39,6 +78,8 @@ export const sync = {
   pending: 0,
   lastSync: null,
   error: '',
+  usage: { reads: 0, writes: 0 },
+  throttled: '',         // '' | 'writes' | 'reads' — paused until midnight
 };
 
 // `localStorage.syncDebug = 1` turns on a running commentary in the console.
@@ -162,9 +203,14 @@ async function attachSpace() {
   const name = await spaceLabel();
   announce({ state: 'live', user: null, family: { id: space, name, members: {} }, error: '' });
   await db.metaSet('familyId', space);
-  // Make the parent document real so the Firestore console shows the tree.
-  F.setDoc(F.doc(store, 'families', space), { name, touchedAt: F.serverTimestamp() }, { merge: true })
-    .catch(err => debug('space doc write skipped:', err.code));
+  await loadUsage();
+  // Make the parent document real once, so the Firestore console shows the tree.
+  if (await db.metaGet('spaceDocWritten', null) !== space) {
+    await F.setDoc(F.doc(store, 'families', space), { name }, { merge: true })
+      .catch(err => debug('space doc write skipped:', err.code));
+    await count('writes', 1);
+    await db.metaSet('spaceDocWritten', space);
+  }
   startStreams(space);
   if (await db.metaGet('uploadedTo', null) !== space) {
     await db.metaSet('uploadedTo', space);
@@ -233,6 +279,13 @@ async function applyRemoteEvents(snap) {
   const changes = snap.docChanges().filter(c =>
     c.type !== 'removed' && !c.doc.metadata.hasPendingWrites);   // skip our own echo
   if (!changes.length) return;
+  if (!snap.metadata.fromCache) await count('reads', changes.length);
+  if (readsLeft() === 0 && !sync.throttled) {
+    // Over this phone's share for today: stop listening, resume after midnight.
+    stopStreams();
+    announce({ throttled: 'reads' });
+    resumeAfterMidnight();
+  }
 
   const local = new Map((await db.allRaw()).map(r => [r.id, r]));
   let highest = await db.metaGet('syncWatermark', 0);
@@ -256,6 +309,8 @@ async function applyRemoteEvents(snap) {
 
 async function applyRemoteMeta(snap) {
   let changed = false;
+  const fresh = snap.docChanges().filter(c => c.type !== 'removed' && !c.doc.metadata.hasPendingWrites);
+  if (fresh.length && !snap.metadata.fromCache) await count('reads', fresh.length);
   for (const change of snap.docChanges()) {
     if (change.type === 'removed') continue;
     const d = change.doc;
@@ -298,6 +353,15 @@ export async function pushNow() {
     let rows = await db.dirty();
     announce({ pending: rows.length });
 
+    if (usage.day !== dayKey()) await loadUsage();
+    const allowed = Math.min(rows.length, writesLeft());
+    if (allowed < rows.length) {
+      debug(`write budget: ${allowed} of ${rows.length} today`);
+      announce({ throttled: 'writes' });
+      resumeAfterMidnight();
+    } else if (sync.throttled === 'writes') announce({ throttled: '' });
+    rows = rows.slice(0, allowed);
+
     debug(`pushing ${rows.length} dirty rows`);
     for (let i = 0; i < rows.length; i += BATCH) {
       const slice = rows.slice(i, i + BATCH);
@@ -309,14 +373,16 @@ export async function pushNow() {
       }
       const t0 = Date.now();
       await batch.commit();
+      await count('writes', slice.length);
       debug(`batch ${i / BATCH + 1}: committed ${slice.length} in ${Date.now() - t0}ms`);
       await db.markClean(slice.map(r => r.id));
       debug(`batch ${i / BATCH + 1}: marked clean in ${Date.now() - t0}ms`);
       announce({ pending: Math.max(0, rows.length - i - slice.length), lastSync: Date.now() });
     }
+    if (allowed < (await db.dirty()).length) announce({ pending: (await db.dirty()).length });
 
-    await pushMeta();
-    await publishStatus();
+    if (writesLeft() > 0) await pushMeta();
+    if (writesLeft() > 0) await publishStatus();
   } finally {
     pushing = false;
     if (pushAgain) { pushAgain = false; schedulePush(); }
@@ -332,6 +398,7 @@ async function pushMeta() {
     const value = await db.metaGet(key, null);
     await F.setDoc(F.doc(store, 'families', familyId, 'meta', key),
       { value, updated: dirtyAt, syncedAt: F.serverTimestamp() });
+    await count('writes', 1);
     await db.metaSet(`${key}:updated`, dirtyAt);
     await db.metaSet(`${key}:dirty`, 0);
   }
@@ -372,6 +439,7 @@ async function publishStatus() {
   if (key === statusJson) return;                  // nothing changed since last publish
   statusJson = key;
   await F.setDoc(F.doc(store, 'families', sync.family.id, 'meta', 'status'), defined(status));
+  await count('writes', 1);
   debug('status published');
 }
 
