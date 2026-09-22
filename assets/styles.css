@@ -31,6 +31,7 @@
   --c-sleep:       var(--series-1);  --c-sleep-fill:  #2a6fc4;
   --c-diaper:      var(--series-3);  --c-diaper-fill: #12926a;
   --c-growth:      var(--series-7);  --c-growth-fill: #4a3aa7;
+  --c-awake:       #e09a00;          --c-awake-fill:  #b97e00;   /* sun: she is up */
   --c-neutral:     var(--text-secondary);
 
   --shadow-1: 0 1px 2px rgba(20,20,16,.05), 0 2px 8px rgba(20,20,16,.05);
@@ -59,6 +60,7 @@
     --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-7: #9085e9;
     --grid:     #2c2c29;
     --c-feed-fill:  #d95926; --c-sleep-fill: #3987e5; --c-diaper-fill: #1a9c6e; --c-growth-fill: #6b5ed0;
+    --c-awake: #f0b429; --c-awake-fill: #c98500;
     --shadow-1: 0 1px 2px rgba(0,0,0,.4), 0 2px 8px rgba(0,0,0,.35);
     --shadow-2: 0 2px 6px rgba(0,0,0,.45), 0 14px 32px rgba(0,0,0,.45);
   }
@@ -78,6 +80,7 @@
   --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-7: #9085e9;
   --grid:     #2c2c29;
   --c-feed-fill:  #d95926; --c-sleep-fill: #3987e5; --c-diaper-fill: #1a9c6e; --c-growth-fill: #6b5ed0;
+  --c-awake: #f0b429; --c-awake-fill: #c98500;
   --shadow-1: 0 1px 2px rgba(0,0,0,.4), 0 2px 8px rgba(0,0,0,.35);
   --shadow-2: 0 2px 6px rgba(0,0,0,.45), 0 14px 32px rgba(0,0,0,.45);
 }
@@ -115,6 +118,10 @@ button, .tab, .chip, .entry, .stat, label.field > span {
 .tone-sleep  { --tone: var(--c-sleep);  --tone-fill: var(--c-sleep-fill); }
 .tone-diaper { --tone: var(--c-diaper); --tone-fill: var(--c-diaper-fill); }
 .tone-growth { --tone: var(--c-growth); --tone-fill: var(--c-growth-fill); }
+.tone-awake  { --tone: var(--c-awake);  --tone-fill: var(--c-awake-fill); }
+/* the sleep card is always a status: warm while she is up, blue while she sleeps */
+.card.awake { background: color-mix(in srgb, var(--c-awake) 7%, var(--surface-1)); border-color: color-mix(in srgb, var(--c-awake) 28%, var(--border)); }
+.card.awake .since { color: var(--c-awake-fill); }
 .tone-neutral{ --tone: var(--c-neutral);--tone-fill: var(--text-secondary); }
 .tone-accent { --tone: var(--accent);   --tone-fill: var(--accent); }
 
