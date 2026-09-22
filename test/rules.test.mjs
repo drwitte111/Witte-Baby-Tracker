@@ -1,72 +1,44 @@
+/**
+ * firestore.rules check: the shared family log is open to the app, and nothing
+ * else in the project is reachable. Run against the emulator:
+ *   firebase emulators:start --project demo-witte --only firestore
+ *   node test/rules.test.mjs
+ */
 import { initializeApp } from 'firebase/app';
-import { getAuth, connectAuthEmulator, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
-import { getFirestore, connectFirestoreEmulator, doc, getDoc, setDoc, updateDoc,
-         collection, getDocs, arrayUnion, Timestamp } from 'firebase/firestore';
+import { getFirestore, connectFirestoreEmulator, doc, getDoc, setDoc, deleteDoc,
+         collection, getDocs } from 'firebase/firestore';
 
-const cfg = { apiKey: 'demo-key', authDomain: '127.0.0.1', projectId: 'demo-witte', appId: '1:1:web:1' };
-const app = initializeApp(cfg);
-const auth = getAuth(app);
-connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+const app = initializeApp({ apiKey: 'demo-key', authDomain: '127.0.0.1', projectId: 'demo-witte', appId: '1:1:web:1' });
 const fs = getFirestore(app);
 connectFirestoreEmulator(fs, '127.0.0.1', 8080);
 
-const settle = () => new Promise(r => setTimeout(r, 1500));   // let the auth token reach Firestore
+const SPACE = 'witte';
 const pass = [], fail = [];
-const check = (name, ok, extra = '') => (ok ? pass : fail).push(`${name}${extra ? ' — ' + extra : ''}`);
-async function denied(name, fn) {
-  try { await fn(); check(name, false, 'ALLOWED but should be denied'); }
-  catch (e) { check(name, e.code === 'permission-denied', e.code); }
-}
+const note = (name, ok, extra = '') => (ok ? pass : fail).push(`${name}${extra ? ' — ' + extra : ''}`);
 async function allowed(name, fn) {
-  try { const r = await fn(); check(name, true); return r; }
-  catch (e) { check(name, false, e.code || e.message); }
+  try { await fn(); note(name, true); } catch (e) { note(name, false, e.code || e.message); }
+}
+async function denied(name, fn) {
+  try { await fn(); note(name, false, 'ALLOWED but should be denied'); }
+  catch (e) { note(name, e.code === 'permission-denied', e.code); }
 }
 
-// --- as A (a family member)
-await signInWithEmailAndPassword(auth, 'a@example.com', 'test1234'); await settle();
-const uidA = auth.currentUser.uid;
-const link = await getDoc(doc(fs, 'users', uidA));
-const familyId = link.data().familyId;
-console.log('family', familyId);
-await allowed('member reads family', () => getDoc(doc(fs, 'families', familyId)));
-await allowed('member reads events', () => getDocs(collection(fs, 'families', familyId, 'events')));
-await allowed('member closes invites', () => updateDoc(doc(fs, 'families', familyId),
-  { inviteOpen: false, inviteExpires: Timestamp.fromMillis(0) }));
-await signOut(auth); await settle();
+// the app's own path — no sign-in, by design
+await allowed('app writes an entry', () => setDoc(doc(fs, 'families', SPACE, 'events', 'test-1'),
+  { type: 'diaper', start: Date.now(), wet: true }));
+await allowed('app reads that entry', () => getDoc(doc(fs, 'families', SPACE, 'events', 'test-1')));
+await allowed('app lists the log', () => getDocs(collection(fs, 'families', SPACE, 'events')));
+await allowed('app writes shared settings', () => setDoc(doc(fs, 'families', SPACE, 'meta', 'units'),
+  { value: { weight: 'lb' }, updated: Date.now() }));
+await allowed('app reads the family doc', () => getDoc(doc(fs, 'families', SPACE)));
+await allowed('app deletes an entry', () => deleteDoc(doc(fs, 'families', SPACE, 'events', 'test-1')));
 
-// --- as C (a stranger with an account)
-await createUserWithEmailAndPassword(auth, `c${Date.now()}@example.com`, 'test1234').catch(async e => {
-  if (e.code === 'auth/email-already-in-use') await signInWithEmailAndPassword(auth, 'c@example.com', 'test1234');
-});
-await settle();
-const uidC = auth.currentUser.uid;
-const emailC = auth.currentUser.email;
-await denied("stranger reads the family doc", () => getDoc(doc(fs, 'families', familyId)));
-await denied("stranger lists the family's events", () => getDocs(collection(fs, 'families', familyId, 'events')));
-await denied('stranger reads another user link', () => getDoc(doc(fs, 'users', uidA)));
-await denied('stranger writes an event', () => setDoc(doc(fs, 'families', familyId, 'events', 'x'), { hi: 1 }));
-await denied('stranger joins with invites closed', () => updateDoc(doc(fs, 'families', familyId),
-  { memberIds: arrayUnion(uidC), [`members.${uidC}`]: { name: 'C' } }));
-await denied('stranger mints an invite', () => setDoc(doc(fs, 'invites', 'HACKED01'),
-  { familyId, createdBy: uidC, expiresAt: Timestamp.fromMillis(Date.now() + 1e6) }));
-await allowed('any signed-in user may look up a code', () => getDoc(doc(fs, 'invites', 'NOSUCHCODE')));
-await signOut(auth); await settle();
-
-// --- A opens an invite, C joins, then C has access
-await signInWithEmailAndPassword(auth, 'a@example.com', 'test1234'); await settle();
-const code = 'T' + Date.now().toString(36).toUpperCase().slice(-7);
-const expires = Timestamp.fromMillis(Date.now() + 3600e3);
-await allowed('member mints an invite', () => setDoc(doc(fs, 'invites', code), { familyId, createdBy: uidA, expiresAt: expires }));
-await allowed('member opens the family', () => updateDoc(doc(fs, 'families', familyId), { inviteOpen: true, inviteExpires: expires }));
-await signOut(auth); await settle();
-
-// --- C joins with a valid, open code and then has access
-await signInWithEmailAndPassword(auth, emailC, 'test1234'); await settle();
-const inv = await allowed('joiner reads the invite', () => getDoc(doc(fs, 'invites', code)));
-await allowed('joiner adds themselves while the invite is open', () => updateDoc(doc(fs, 'families', inv.data().familyId),
-  { memberIds: arrayUnion(uidC), [`members.${uidC}`]: { name: 'C' } }));
-await allowed('new member reads events', () => getDocs(collection(fs, 'families', familyId, 'events')));
-await signOut(auth); await settle();
+// everything else in the project stays shut
+await denied('another family is unreachable', () => getDocs(collection(fs, 'families', 'someone-else', 'events')));
+await denied('writing to another family', () => setDoc(doc(fs, 'families', 'someone-else', 'events', 'x'), { a: 1 }));
+await denied('reading another family doc', () => getDoc(doc(fs, 'families', 'someone-else')));
+await denied('a stray top-level collection', () => setDoc(doc(fs, 'whatever', 'x'), { a: 1 }));
+await denied('reading a stray collection', () => getDocs(collection(fs, 'whatever')));
 
 console.log('\nPASS:'); pass.forEach(x => console.log('  ✓', x));
 console.log('FAIL:'); fail.length ? fail.forEach(x => console.log('  ✗', x)) : console.log('  (none)');

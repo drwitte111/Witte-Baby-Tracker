@@ -48,51 +48,57 @@ Growth measurements are stored canonically in grams and centimetres, so a file m
 `IN` head measurements (as the Nara export does) converts cleanly and displays in whichever
 unit you pick.
 
-## Sync between caregivers (optional)
+## Sync between the two phones
 
-Sync is off until you connect a Firebase project of your own. Everything below is one-time
-setup; after it, both phones show the same data within a second or two, and each phone keeps
-working with no signal — changes queue and upload when it reconnects.
+GitHub Pages hosts the app; Firebase is only the database behind it. Both phones point at one
+shared log — there are no accounts and nothing to sign into. Open the app and you are looking
+at the same data your partner is, updated within a second or two, and anything logged with no
+signal uploads as soon as you reconnect.
 
-### Make the Firebase project
+### One-time setup in the Firebase console
 
-1. [console.firebase.google.com](https://console.firebase.google.com) → **Add project**
-   (Google Analytics is not needed).
-2. **Build → Firestore Database → Create database** → *production mode* → pick the region
-   closest to you.
-3. **Build → Authentication → Get started → Email/Password → Enable**.
-4. **Project settings (gear) → Your apps → Web (`</>`)** → register the app → copy the
-   `firebaseConfig` snippet it shows.
-5. **Firestore → Rules** → paste the contents of [`firestore.rules`](firestore.rules) →
-   **Publish**. (Or `firebase deploy --only firestore:rules` with the included
-   `firebase.json`.) Do this before signing in — the default production rules deny everything.
+1. [console.firebase.google.com](https://console.firebase.google.com) → **Create a project**
+   → name it → Google Analytics off.
+2. **Build → Firestore Database → Create database** → **Production mode** → region
+   `nam5 (us-central)`.
+3. **⚙ Project settings → Your apps → Web `</>`** → nickname it → **Register app**.
+   This does *not* host anything — registering a web app only mints the `apiKey`/`appId` the
+   browser needs to reach Firestore. Skip the "Add Firebase SDK" and "Deploy to Firebase
+   Hosting" steps it offers; GitHub Pages already serves the app.
+4. Copy the `firebaseConfig` block and paste it into
+   [`assets/firebase-config.js`](assets/firebase-config.js), replacing `export const
+   firebaseConfig = null;`. Those values are public by design — they identify the project, they
+   are not credentials.
+5. **Firestore → Rules** → replace everything with [`firestore.rules`](firestore.rules) →
+   **Publish**. Production mode denies every request until you do.
 
-### Connect the phones
+Commit, let Pages redeploy, and open the app on both phones. The first phone uploads whatever
+history it already holds; the second pulls all of it on first open. The More screen shows the
+connection, anything still queued, and when it last synced.
 
-1. On the first phone: **More → Sync**, paste the config snippet, **Connect project**.
-2. Create an account with your email, then **Create a family**. Any history already on that
-   phone uploads.
-3. **Invite caregiver** gives an 8-character code, good for 24 hours.
-4. On the second phone: same config snippet, create their *own* account, enter the code.
-   The whole history downloads.
+### What "no sign-in" means
 
-The config snippet is not a secret — Firebase web keys are public by design, and
-`firestore.rules` is what actually protects the data: only members of your family can read or
-write its entries, and a stranger can only join while an invite is open and unexpired. That is
-covered by [`test/rules.test.mjs`](test/rules.test.mjs).
+Anyone who has the app's URL can read and write the log — that is the trade for opening the app
+and just being in, on both phones, forever. Nothing else in the Firebase project is reachable:
+the rules allow exactly one path and deny everything else, which
+[`test/rules.test.mjs`](test/rules.test.mjs) checks.
+
+To lock it down later: set `REQUIRE_SIGN_IN = true` in `assets/firebase-config.js`, enable
+Email/Password in the console, and change `if space == 'witte'` to `if request.auth != null` in
+the rules. The app then asks for an email and password, and the per-caregiver account and
+invite-code paths in `js/sync.js` come back to life.
 
 ### How it behaves
 
-- **Local-first.** IndexedDB stays the source of truth; Firestore is the shared copy. Signing
-  out leaves the data on the device.
-- **Offline.** Entries logged with no signal are marked dirty and pushed on reconnect.
-- **Conflicts** resolve last-write-wins per entry, on the editing device's clock. Two people
-  editing the same entry within seconds is the only case where one edit wins silently.
+- **Local-first.** IndexedDB stays the source of truth; Firestore is the shared copy. The app
+  works fully with Firebase unreachable.
+- **Offline.** Entries logged with no signal are flagged and pushed on reconnect.
+- **Conflicts** resolve last-write-wins per entry, on the editing device's clock.
 - **Deletes travel as tombstones**, so a delete on one phone doesn't sync back from the other.
-- **Shared settings.** Baby name, birth date and units sync; the caregiver name on each device
-  stays local, so entries record who logged them.
-- **Cost.** The free Spark tier allows 50k reads and 20k writes a day. A first sync of ~3,800
-  entries uses about 3,800 writes; ordinary daily use is a few dozen operations.
+- **Shared settings.** Baby name, birth date and units sync; the caregiver name stays per
+  device, so entries record who logged them.
+- **Cost.** The free Spark tier allows 50k reads and 20k writes a day. A first upload of ~3,800
+  entries is about 3,800 writes; ordinary daily use is a few dozen operations.
 
 ## Data and privacy
 
@@ -153,6 +159,7 @@ js/charts.js          inline-SVG bar / stacked / line / rhythm charts
 js/forms.js           add & edit sheets
 js/ui.js              sheets, toasts, confirm, tooltips, download
 js/views/*.js         home, log, stats, growth, settings, sync card
+assets/firebase-config.js  your Firebase project settings (public by design)
 firestore.rules       security rules — paste into the Firebase console
 firebase.json         rules deploy + emulator config for the test suites
 test/                 rules and two-device sync tests (emulator-based)

@@ -1,6 +1,6 @@
 // The Sync card on the More screen: project config, account, family, invites.
-import { sync, onSyncChange, getConfig, setConfig, clearConfig, parseConfig,
-         signUp, signIn, signOutNow, createFamily, joinFamily,
+import { sync, onSyncChange, setConfig, clearConfig, parseConfig, isBaked, needsSignIn,
+         signUp, signIn, signOutNow, createFamily, joinFamily, uploadEverything,
          createInvite, revokeInvites, pushNow, init as initSync } from '../sync.js';
 import { esc, toast, confirm, sheet } from '../ui.js';
 import { ago } from '../format.js';
@@ -18,14 +18,35 @@ export function syncCard() {
   const s = STATUS[sync.state] || STATUS.off;
   let body = '';
 
+  // Without sign-in there is no account or family to manage — just a connection.
+  if (!needsSignIn() && sync.state === 'live') {
+    return `<section class="card" id="sync-card">
+      <div class="card-head"><span class="card-title">Sync</span>
+        <span class="muted">${s.dot} ${esc(s.text)}</span></div>
+      <p class="sub">Both phones read and write <b>${esc(sync.family?.name || 'the shared log')}</b>.
+        New entries appear on the other phone within a second or two, and anything logged with no
+        signal uploads when you are back.</p>
+      <p class="sub">${sync.pending ? `${sync.pending} change${sync.pending === 1 ? '' : 's'} waiting to upload`
+        : sync.lastSync ? `Up to date · last synced ${esc(ago(sync.lastSync))}` : 'Up to date'}</p>
+      ${sync.error ? `<p class="banner">${esc(sync.error)}</p>` : ''}
+      <div class="row">
+        <button class="btn primary" data-sync="push">Sync now</button>
+        <button class="btn" data-sync="reupload">Re-upload this phone</button>
+      </div>
+    </section>`;
+  }
+
   switch (sync.state) {
     case 'off':
-      body = `<p class="sub">Both caregivers see the same data once this is connected to a
-        Firebase project. Create one at console.firebase.google.com (free tier is plenty),
-        add a Web app, then paste the config snippet it gives you.</p>
-        <label class="field"><span>Firebase config</span>
-          <textarea name="cfg" placeholder="const firebaseConfig = { apiKey: ... }"></textarea></label>
-        <div class="row"><button class="btn primary wide" data-sync="save-config">Connect project</button></div>`;
+      body = isBaked()
+        ? `<p class="sub">A project is configured but did not load. Check the connection and retry.</p>
+           <div class="row"><button class="btn primary wide" data-sync="retry">Retry</button></div>`
+        : `<p class="sub">Both phones see the same data once this points at a Firebase project.
+           The usual way is to paste the config into <code>assets/firebase-config.js</code> in the
+           repo. You can also paste it here to try it on this phone only.</p>
+           <label class="field"><span>Firebase config</span>
+             <textarea name="cfg" placeholder="const firebaseConfig = { apiKey: ... }"></textarea></label>
+           <div class="row"><button class="btn primary wide" data-sync="save-config">Connect project</button></div>`;
       break;
 
     case 'loading':
@@ -181,6 +202,15 @@ export function wireSync(root, ctx) {
         case 'push':
           await pushNow();
           toast('Synced');
+          break;
+
+        case 'reupload':
+          if (!await confirm('Send every entry on this phone to the shared log again?',
+                             { danger: false, okLabel: 'Upload' })) return;
+          busy(true);
+          await uploadEverything();
+          await pushNow();
+          toast('Uploaded');
           break;
       }
     } catch (err) {
