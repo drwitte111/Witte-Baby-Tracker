@@ -98,7 +98,7 @@ invite-code paths in `js/sync.js` come back to life.
 - **Shared settings.** Baby name, birth date and units sync; the caregiver name stays per
   device, so entries record who logged them.
 - **Cost.** The free Spark tier allows 50,000 reads and 20,000 writes a day. A day of logging
-  is ~25 of each per phone; the widget adds ~100 reads. A first upload of ~3,800 entries is a
+  is well under 200 of each across both phones. A first upload of ~3,800 entries is a
   one-time 3,800 writes.
 
 ### Staying inside the free tier — guaranteed
@@ -123,25 +123,6 @@ granted. **Delete all data** clears this device when sync is off, and deletes fo
 family when it is on (it says which).
 
 Personal exports are git-ignored; don't commit them.
-
-## Lock Screen / Home Screen widget
-
-iOS only lets native apps into the Dynamic Island and Live Activities. The free route to a
-glanceable timer is a **Scriptable** widget: [`widget/witte-baby-widget.js`](widget/witte-baby-widget.js)
-reads one small `meta/status` document the app keeps in Firestore and renders:
-
-- **Lock Screen rectangular:** "🌙 Asleep since 8:41 PM" with a live ticking timer, and the last feed
-- **Lock Screen inline** (next to the clock): "🌙 42:13 · 🍼 1 hr ago"
-- **Home Screen small / medium:** baby name, today's counts, sleep or feed state, last feed and diaper
-
-Timers tick live. The underlying data refreshes on Apple's widget schedule, roughly every 5–15
-minutes, so a state change on the other phone shows up within that window.
-
-**More → Lock Screen widget → Copy widget script**, then paste it into a new Scriptable script
-and add the widget. The script's only settings are `PROJECT` and `SPACE` at the top.
-
-The status document is rewritten by the app after every change; it is derived from local data,
-so it needs no Firestore query or index.
 
 ## On iPhone
 
