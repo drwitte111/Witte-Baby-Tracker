@@ -220,6 +220,11 @@ body.kb-open .tabbar { bottom: -120px; pointer-events: none; }
 .adjust-label { flex-basis: 100%; font-size: 12.5px; color: var(--text-muted); margin-bottom: -2px; }
 .row.adjust .chip { flex: 1 1 0; justify-content: center; min-height: 40px; padding: 6px 6px; font-size: 13.5px; white-space: nowrap; background: var(--surface-1); color: var(--tone-fill); border-color: color-mix(in srgb, var(--tone) 30%, var(--border)); box-shadow: var(--shadow-1); }
 .row.adjust .chip .ico { width: 15px; height: 15px; }
+.chip.set-time { position: relative; overflow: hidden; }
+.chip.set-time input {
+  position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0;
+  opacity: 0; margin: 0; padding: 0; border: 0; cursor: pointer;   /* the tap lands here → native wheel */
+}
 .chip {
   border: 1px solid var(--border); background: var(--surface-1); border-radius: var(--r-chip);
   padding: 8px 14px; min-height: 38px; cursor: pointer; font-size: 14px; font-weight: 560; color: var(--text-secondary);
