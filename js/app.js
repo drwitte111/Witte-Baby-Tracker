@@ -62,25 +62,66 @@ function paintHeader() {
   document.getElementById('profile-age').textContent = ageFrom(state.profile?.birth);
 }
 
+async function paintRoute(route) {
+  tickHandlers = [];
+  const view = document.getElementById('view');
+  // A fresh node drops every listener the previous view attached.
+  const fresh = document.createElement('main');
+  fresh.id = 'view'; fresh.className = 'view'; fresh.tabIndex = -1;
+  view.replaceWith(fresh);
+  document.querySelectorAll('.tab').forEach(t =>
+    t.setAttribute('aria-selected', String(t.dataset.route === route)));
+  await ROUTES[route].render(fresh, ctx);
+  maybeShowInstallHint(fresh, route);
+}
+
 async function renderRoute(route) {
   if (rendering) return;
   rendering = true;
   try {
-    tickHandlers = [];
-    const view = document.getElementById('view');
-    // A fresh node drops every listener the previous view attached.
-    const fresh = document.createElement('main');
-    fresh.id = 'view'; fresh.className = 'view'; fresh.tabIndex = -1;
-    view.replaceWith(fresh);
-    document.querySelectorAll('.tab').forEach(t =>
-      t.setAttribute('aria-selected', String(t.dataset.route === route)));
-    await ROUTES[route].render(fresh, ctx);
+    const smooth = document.startViewTransition
+      && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (smooth) await document.startViewTransition(() => paintRoute(route)).finished;
+    else await paintRoute(route);
   } catch (err) {
     console.error(err);
     toast('Something went wrong — see the console');
   } finally {
     rendering = false;
   }
+}
+
+// iOS has no install prompt, so say it once, on the Home screen, dismissibly.
+function maybeShowInstallHint(root, route) {
+  if (route !== 'home') return;
+  const iOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const standalone = navigator.standalone === true
+    || matchMedia('(display-mode: standalone)').matches;
+  if (!iOS || standalone || localStorage.getItem('installHintDismissed')) return;
+  const hint = document.createElement('div');
+  hint.className = 'install-hint';
+  hint.innerHTML = `<span>📲</span><span><b>Add to Home Screen</b> — tap Share, then
+    “Add to Home Screen”. It runs full screen, works offline, and keeps its data safely.</span>
+    <button type="button" aria-label="Dismiss">×</button>`;
+  hint.querySelector('button').addEventListener('click', () => {
+    localStorage.setItem('installHintDismissed', '1');
+    hint.remove();
+  });
+  root.prepend(hint);
+}
+
+// Keep the chrome clear of the on-screen keyboard (iOS resizes the visual viewport).
+function initKeyboardAware() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const update = () => {
+    const overlap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    document.documentElement.style.setProperty('--kb', `${Math.round(overlap)}px`);
+    document.body.classList.toggle('kb-open', overlap > 120);
+  };
+  vv.addEventListener('resize', update);
+  vv.addEventListener('scroll', update);
+  update();
 }
 
 function startTicker() {
@@ -121,6 +162,7 @@ async function reloadSharedState() {
 async function boot() {
   initTheme();
   initTooltips();
+  initKeyboardAware();
 
   const [profile, units, caregiver, activeFeed, activeSleep] = await Promise.all([
     db.metaGet('profile', null),

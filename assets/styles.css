@@ -19,6 +19,7 @@
   --shadow: 0 1px 2px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.06);
   --r: 14px;
   --safe-b: env(safe-area-inset-bottom, 0px);
+  --kb: 0px;                      /* on-screen keyboard overlap, set from visualViewport */
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -57,6 +58,15 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; }
+/* No double-tap zoom delay, no text-selection loupe on chrome the thumb lands on. */
+button, .tab, .chip, .entry, .stat, label.field > span {
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.entry-note, .sub, .tbl, textarea, input { -webkit-user-select: text; user-select: text; }
 body {
   background: var(--surface-0);
   color: var(--text-primary);
@@ -85,7 +95,10 @@ button { font: inherit; color: inherit; }
   width: 40px; height: 40px; font-size: 18px; cursor: pointer;
 }
 .view { max-width: 760px; margin: 0 auto; padding: 16px 16px calc(96px + var(--safe-b)); outline: none; }
+/* The keyboard covers the tab bar anyway — get it out of the way instead. */
+body.kb-open .tabbar { transform: translateY(130%); pointer-events: none; }
 .tabbar {
+  transition: transform .18s ease-out;
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
   display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px;
   background: color-mix(in srgb, var(--surface-1) 94%, transparent);
@@ -151,9 +164,14 @@ button { font: inherit; color: inherit; }
 .entry-note { color: var(--text-secondary); font-size: 13px; font-style: italic; overflow-wrap: anywhere; }
 
 /* ---- forms / sheet -------------------------------------------------- */
-.sheet-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 40; display: flex; align-items: flex-end; justify-content: center; }
+/* Sits on the visual viewport, so an open keyboard pushes the sheet up rather than over it. */
+.sheet-backdrop {
+  position: fixed; inset: 0 0 var(--kb) 0; background: rgba(0,0,0,.45); z-index: 40;
+  display: flex; align-items: flex-end; justify-content: center;
+}
 .sheet {
-  background: var(--surface-1); width: 100%; max-width: 760px; max-height: 92vh; overflow-y: auto;
+  background: var(--surface-1); width: 100%; max-width: 760px; overflow-y: auto;
+  max-height: min(92vh, calc(100dvh - var(--kb) - 24px));
   border-radius: 18px 18px 0 0; padding: 16px 16px calc(20px + var(--safe-b)); box-shadow: var(--shadow);
   animation: rise .18s ease-out;
 }
@@ -167,6 +185,13 @@ input, select, textarea {
   border: 1px solid var(--border); border-radius: 10px; padding: 11px 12px; min-height: 46px;
 }
 textarea { min-height: 72px; resize: vertical; }
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+button:focus-visible, .chip:focus-visible, .entry:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
 .field-row { display: flex; gap: 8px; }
 .field-row > * { flex: 1; }
 .field-row .unit { flex: 0 0 92px; }
@@ -192,7 +217,7 @@ textarea { min-height: 72px; resize: vertical; }
 
 /* ---- misc ---------------------------------------------------------- */
 .toast {
-  position: fixed; left: 50%; bottom: calc(86px + var(--safe-b)); transform: translateX(-50%) translateY(8px);
+  position: fixed; left: 50%; bottom: calc(86px + var(--safe-b) + var(--kb)); transform: translateX(-50%) translateY(8px);
   background: var(--text-primary); color: var(--surface-1); padding: 10px 16px; border-radius: 999px;
   font-size: 14px; opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s; z-index: 50; max-width: 90vw;
 }
@@ -200,3 +225,21 @@ textarea { min-height: 72px; resize: vertical; }
 .empty { text-align: center; color: var(--text-muted); padding: 40px 16px; }
 .banner { background: color-mix(in srgb, var(--series-2) 14%, var(--surface-1)); border: 1px solid color-mix(in srgb, var(--series-2) 40%, var(--border)); border-radius: 12px; padding: 10px 12px; font-size: 14px; margin-bottom: 12px; }
 progress { width: 100%; height: 8px; }
+
+/* ---- iOS home-screen hint ---- */
+.install-hint {
+  display: flex; gap: 10px; align-items: flex-start;
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r);
+  padding: 12px 14px; margin-bottom: 12px; font-size: 14px; box-shadow: var(--shadow);
+}
+.install-hint button { background: none; border: 0; color: var(--text-muted); font-size: 20px; line-height: 1; padding: 0 2px; cursor: pointer; }
+
+/* ---- 120Hz-friendly tab transition (Safari 18+/iOS 18+) ---- */
+@view-transition { navigation: none; }
+::view-transition-old(root) { animation: vt-out .16s ease-in both; }
+::view-transition-new(root) { animation: vt-in .18s ease-out both; }
+@keyframes vt-out { to { opacity: 0 } }
+@keyframes vt-in { from { opacity: 0; transform: translateY(6px) } }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+}

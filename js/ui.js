@@ -102,6 +102,26 @@ export function initTooltips() {
   document.addEventListener('scroll', hide, { passive: true, capture: true });
 }
 
+/**
+ * Hand a file to the OS. On iOS the share sheet is the useful path (AirDrop,
+ * Messages, Files, Mail); everywhere else this falls back to a download.
+ * Returns 'shared' | 'cancelled' | 'downloaded'.
+ */
+export async function shareOrDownload(filename, text, mime = 'text/csv') {
+  try {
+    const file = new File([text], filename, { type: mime });
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], title: filename });
+      return 'shared';
+    }
+  } catch (err) {
+    if (err?.name === 'AbortError') return 'cancelled';
+    // Anything else: fall through to a plain download.
+  }
+  download(filename, text, mime);
+  return 'downloaded';
+}
+
 /** Trigger a client-side file download. */
 export function download(filename, text, mime = 'text/csv;charset=utf-8') {
   const blob = new Blob([text], { type: mime });

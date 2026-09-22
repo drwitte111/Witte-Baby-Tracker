@@ -107,6 +107,29 @@ family when it is on (it says which).
 
 Personal exports are git-ignored; don't commit them.
 
+## On iPhone
+
+The app is tuned for iPhone 16 Pro on iOS 26, and degrades cleanly elsewhere.
+
+- **Install it:** Safari → Share → *Add to Home Screen*. The app says so once, on the Home
+  screen, until dismissed. Installed, it launches full screen with its own launch image, keeps
+  its data out of Safari's 7-day eviction rules, and runs offline.
+- **Dynamic Island:** the status bar is translucent and every edge respects the safe-area
+  insets, so nothing hides under the island or the home indicator.
+- **Keyboard:** the tab bar drops away and sheets ride above the keyboard (`visualViewport`),
+  so the field you are typing in is never covered.
+- **Screen stays awake** while a nursing timer runs, and only then.
+- **Export** uses the iOS share sheet — AirDrop the CSV to the other phone, drop it in Files,
+  or mail it to the pediatrician. It falls back to a download on desktop.
+- **Transitions** use the View Transitions API, so tab switches are smooth on the 120 Hz
+  display; they are skipped under Reduce Motion.
+- **Touch targets** are at least 48 px with double-tap zoom disabled on controls, so a
+  one-handed 3am tap lands where you meant it.
+
+Not possible from a web app on iOS: Live Activities in the Dynamic Island, Lock Screen widgets,
+Siri shortcuts, and scheduled local notifications. Web push does work for installed PWAs but
+needs a server to send it, so nothing here depends on it.
+
 ## Deploying to GitHub Pages
 
 Settings → Pages → deploy from branch, pick the branch and `/` (root). `.nojekyll` is already
