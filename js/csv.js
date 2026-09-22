@@ -99,6 +99,7 @@ export function fromNaraCsv(text) {
       tz: get(row, 'Time Zone') || undefined,
       familyKey: get(row, '_familyKey') || undefined,
       profileKey: get(row, '_profileKey') || undefined,
+      profileId: get(row, '_profileKey') || undefined,
     };
 
     switch (type) {

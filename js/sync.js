@@ -18,7 +18,7 @@ const SDK_VERSION = '12.19.0';
 const sdkBase = () => localStorage.getItem('firebaseSdkBase')
   || `https://www.gstatic.com/firebasejs/${SDK_VERSION}`;
 
-const SYNCED_META = ['profile', 'units'];       // meta keys shared across devices
+const SYNCED_META = ['profiles', 'current', 'units', 'profile'];   // shared across devices
 const PUSH_DEBOUNCE = 900;
 const BATCH = 400;
 

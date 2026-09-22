@@ -1,6 +1,6 @@
 {
   "name": "Witte Baby Tracker",
-  "short_name": "Baby",
+  "short_name": "Witte Baby",
   "description": "Breastfeeding, sleep, diaper and growth tracking that stays on your device.",
   "start_url": "./",
   "scope": "./",
