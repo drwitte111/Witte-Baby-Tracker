@@ -11,6 +11,7 @@ import * as growth from './views/growth.js';
 import * as settings from './views/settings.js';
 
 const ROUTES = { home, log, stats, growth, settings };
+const ORDER = ['home', 'log', 'stats', 'growth', 'settings'];   // tab-bar order, for swipes
 const DEFAULT_UNITS = { weight: 'lb', length: 'in', volume: 'oz' };
 
 const state = {
@@ -31,8 +32,9 @@ const ctx = {
   refresh: () => renderRoute(currentRoute()),
   // Replace, never push: tab changes must not build browser history, or iOS's
   // edge-swipe back gesture walks through the tabs in visiting order.
-  go(route) {
+  go(route, dir = '') {
     history.replaceState(null, '', `#/${route}`);
+    document.documentElement.dataset.nav = dir;               // slide direction for the transition
     renderRoute(route);
   },
   onTick(fn) { tickHandlers.push(fn); },
@@ -171,6 +173,31 @@ function maybeShowInstallHint(root, route) {
   root.prepend(hint);
 }
 
+/**
+ * Horizontal swipe anywhere on a screen moves one tab over, in tab-bar order.
+ * Deliberately not browser history: nothing to walk back through. Ignores
+ * gestures that begin on things that scroll or edit horizontally, and on sheets.
+ */
+function initSwipeNav() {
+  let sx = 0, sy = 0, st = 0, live = false;
+  const ignore = t => t.closest?.('.chips, input, textarea, select, .sheet-backdrop, [data-no-swipe]');
+  addEventListener('touchstart', e => {
+    const t = e.touches[0];
+    live = e.touches.length === 1 && !ignore(e.target);
+    sx = t.clientX; sy = t.clientY; st = Date.now();
+  }, { passive: true });
+  addEventListener('touchend', e => {
+    if (!live) return;
+    live = false;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - sx, dy = t.clientY - sy, dt = Date.now() - st;
+    if (dt > 700 || Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 2.5) return;
+    const i = ORDER.indexOf(currentRoute());
+    const next = ORDER[i + (dx < 0 ? 1 : -1)];
+    if (next) ctx.go(next, dx < 0 ? 'next' : 'prev');
+  }, { passive: true });
+}
+
 // Keep the chrome clear of the on-screen keyboard (iOS resizes the visual viewport).
 function initKeyboardAware() {
   const vv = window.visualViewport;
@@ -231,6 +258,7 @@ async function boot() {
   initTheme();
   initTooltips();
   initKeyboardAware();
+  initSwipeNav();
 
   const [profiles, current, legacyProfile, units, caregiver, activeFeed, activeSleep] = await Promise.all([
     db.metaGet('profiles', []),
@@ -251,7 +279,7 @@ async function boot() {
   applyScope();
 
   document.querySelectorAll('.tab').forEach(tab =>
-    tab.addEventListener('click', () => ctx.go(tab.dataset.route)));
+    tab.addEventListener('click', () => ctx.go(tab.dataset.route, '')));
   addEventListener('hashchange', () => renderRoute(currentRoute()));
   addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') { syncWakeLock(); renderRoute(currentRoute()); }
