@@ -34,7 +34,7 @@ function babiesCard(ctx, v) {
 
 const LOOK_OPTIONS = [
   { id: 'default', label: 'Default', sw: ['#2a78d6', '#eb6834', '#1baf7a', '#4a3aa7'] },
-  { id: 'girl',    label: 'Girl',    sw: ['#d6336c', '#7c6fd6', '#e8603c', '#b0448f'] },
+  { id: 'girl',    label: 'Girl',    sw: ['#e0407a', '#7c6fd6', '#e8603c', '#b0448f'] },
   { id: 'boy',     label: 'Boy',     sw: ['#1f5fbf', '#3457c9', '#e8602f', '#0f8a8a'] },
 ];
 
