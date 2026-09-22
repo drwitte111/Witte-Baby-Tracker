@@ -124,12 +124,14 @@ export function stackedBarChart({ data, series, width, height = 170, fmt = v => 
 /**
  * Line + markers over time. points: [{x(ms), y, tip}]
  */
-export function lineChart({ points, width, height = 180, color = 'var(--series-1)', fmt = v => v, xFmt }) {
+export function lineChart({ points, width, height = 180, color = 'var(--series-1)', fmt = v => v, xFmt, projection = null }) {
   const padL = 44, padR = 12, padT = 12, padB = 24;
   const w = Math.max(240, width), h = height;
   const iw = w - padL - padR, ih = h - padT - padB;
   if (points.length === 0) return '';
-  const xs = points.map(p => p.x), ys = points.map(p => p.y);
+  // The projected point stretches both axes so the dashed tail has room.
+  const all = projection ? [...points, projection] : points;
+  const xs = all.map(p => p.x), ys = all.map(p => p.y);
   const x0 = Math.min(...xs), x1 = Math.max(...xs) || x0 + 1;
   const band = niceBand(Math.min(...ys), Math.max(...ys));
   const yLo = band.lo, yHi = band.hi;
@@ -144,14 +146,21 @@ export function lineChart({ points, width, height = 180, color = 'var(--series-1
   }
   const d = points.map((p, i) => `${i ? 'L' : 'M'}${px(p.x).toFixed(1)} ${py(p.y).toFixed(1)}`).join(' ');
   svg += `<path d="${d}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+  if (projection) {
+    // Dashed, same hue, hollow end: read as "estimated", not measured.
+    const last = points[points.length - 1];
+    svg += `<path d="M${px(last.x).toFixed(1)} ${py(last.y).toFixed(1)} L${px(projection.x).toFixed(1)} ${py(projection.y).toFixed(1)}" fill="none" stroke="${color}" stroke-width="2" stroke-dasharray="3 5" stroke-linecap="round" opacity=".8"/>`;
+    svg += `<circle cx="${px(projection.x).toFixed(1)}" cy="${py(projection.y).toFixed(1)}" r="4" fill="var(--surface-1)" stroke="${color}" stroke-width="2" data-tip="${esc(projection.tip || fmt(projection.y))}"/>`;
+    svg += `<circle cx="${px(projection.x).toFixed(1)}" cy="${py(projection.y).toFixed(1)}" r="14" fill="transparent" data-tip="${esc(projection.tip || fmt(projection.y))}"/>`;
+  }
   points.forEach(p => {
     svg += `<circle cx="${px(p.x).toFixed(1)}" cy="${py(p.y).toFixed(1)}" r="4" fill="${color}" stroke="var(--surface-1)" stroke-width="2" data-tip="${esc(p.tip || fmt(p.y))}"/>`;
     svg += `<circle cx="${px(p.x).toFixed(1)}" cy="${py(p.y).toFixed(1)}" r="14" fill="transparent" data-tip="${esc(p.tip || fmt(p.y))}"/>`;
   });
   if (xFmt) {
-    const first = points[0], last = points[points.length - 1];
+    const first = points[0], last = all[all.length - 1];
     svg += `<text class="axis-text" x="${padL}" y="${h - 8}" text-anchor="start">${esc(xFmt(first.x))}</text>`;
-    if (points.length > 1) svg += `<text class="axis-text" x="${w - padR}" y="${h - 8}" text-anchor="end">${esc(xFmt(last.x))}</text>`;
+    if (all.length > 1) svg += `<text class="axis-text" x="${w - padR}" y="${h - 8}" text-anchor="end">${esc(projection ? 'today' : xFmt(last.x))}</text>`;
   }
   return svg + '</svg>';
 }

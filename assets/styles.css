@@ -370,6 +370,7 @@ button:focus-visible, .chip:focus-visible, .entry:focus-visible { outline: 2px s
 .tbl th, .tbl td { text-align: right; padding: 8px 6px; border-bottom: 1px solid var(--hairline); }
 .tbl th:first-child, .tbl td:first-child { text-align: left; }
 .tbl th { color: var(--text-muted); font-weight: 600; font-size: 12px; }
+.tbl tr.est td { color: var(--text-secondary); font-style: italic; border-bottom: 1px dashed var(--border); }
 
 /* ---- misc ---------------------------------------------------------- */
 .toast {
