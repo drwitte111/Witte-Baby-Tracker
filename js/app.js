@@ -29,7 +29,12 @@ let rendering = false;
 const ctx = {
   state,
   refresh: () => renderRoute(currentRoute()),
-  go(route) { location.hash = `#/${route}`; },
+  // Replace, never push: tab changes must not build browser history, or iOS's
+  // edge-swipe back gesture walks through the tabs in visiting order.
+  go(route) {
+    history.replaceState(null, '', `#/${route}`);
+    renderRoute(route);
+  },
   onTick(fn) { tickHandlers.push(fn); },
 
   async setActiveFeed(v) { state.activeFeed = v; await db.metaSet('activeFeed', v); await markMetaDirty('activeFeed'); syncWakeLock(); },
