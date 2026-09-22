@@ -6,7 +6,7 @@ Both suites run against the Firebase emulators — no real project, no cost, no 
 
 ```bash
 npm install --no-save firebase@12 firebase-tools@15      # not committed
-firebase emulators:start --project demo-witte --only auth,firestore
+firebase emulators:start --project demo-witte --only firestore
 ```
 
 For the browser suite, serve the app and give it a local copy of the SDK
@@ -27,8 +27,8 @@ The app reads two localStorage overrides, set by the test harness:
 
 | File | Covers |
 |---|---|
-| `rules.test.mjs` | Firestore rules: members read/write their family, strangers are refused the family doc, its events, other users' links, writing events, joining with invites closed, and minting invites; a holder of an open code can join and then read |
-| `sync.e2e.mjs` | Two browser contexts as two phones: import 3,841 rows, create a family, bulk upload, join by code, pull the whole history, log entries offline and see them arrive after reconnecting |
+| `rules.test.mjs` | Firestore rules: the app's one shared path is readable and writable, and every other path in the project is denied |
+| `sync.e2e.mjs` | Two browser contexts as two phones: import 3,841 rows, connect, bulk upload, second phone pulls the whole history with nothing to sign into, entries travel both ways, and an entry logged offline arrives after reconnecting |
 
 ```bash
 node test/rules.test.mjs        # exits non-zero if any rule check fails

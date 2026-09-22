@@ -22,8 +22,11 @@ const SYNCED_META = ['profile', 'units'];       // meta keys shared across devic
 const PUSH_DEBOUNCE = 900;
 const BATCH = 400;
 
-let sdk = null;          // { app, auth, fs }
+let sdk = null;          // { app, auth?, fs }
 let app = null, auth = null, store = null;
+let baked = null;        // assets/firebase-config.js, if it carries a project
+let space = 'family';    // the shared dataset everything lives under
+let requireSignIn = false;
 let unsubEvents = null, unsubMeta = null, unsubAuth = null;
 let pushTimer = null, pushing = false, pushAgain = false;
 
@@ -48,7 +51,32 @@ function announce(patch = {}) {
 
 /* ---------------- configuration ---------------- */
 
-export async function getConfig() { return db.metaGet('firebaseConfig', null); }
+async function loadBaked() {
+  if (baked) return baked;
+  try {
+    const m = await import('../assets/firebase-config.js');
+    baked = m;
+    space = m.SPACE || space;
+    requireSignIn = !!m.REQUIRE_SIGN_IN;
+    return m;
+  } catch {
+    baked = {};
+    return baked;
+  }
+}
+
+export async function getConfig() {
+  const b = await loadBaked();
+  return b.firebaseConfig || db.metaGet('firebaseConfig', null);
+}
+
+export async function spaceLabel() {
+  const b = await loadBaked();
+  return b.SPACE_NAME || b.SPACE || 'Shared';
+}
+
+export function isBaked() { return !!baked?.firebaseConfig; }
+export function needsSignIn() { return requireSignIn; }
 
 export async function setConfig(config) {
   await db.metaSet('firebaseConfig', config);
@@ -83,12 +111,14 @@ export function parseConfig(text) {
 async function loadSdk() {
   if (sdk) return sdk;
   const base = sdkBase();
-  const [a, b, c] = await Promise.all([
+  const parts = [
     import(/* @vite-ignore */ `${base}/firebase-app.js`),
-    import(/* @vite-ignore */ `${base}/firebase-auth.js`),
     import(/* @vite-ignore */ `${base}/firebase-firestore.js`),
-  ]);
-  sdk = { app: a, auth: b, fs: c };
+  ];
+  // 400 KB of auth code is dead weight when there is no sign-in.
+  if (requireSignIn) parts.push(import(/* @vite-ignore */ `${base}/firebase-auth.js`));
+  const [a, c, b] = await Promise.all(parts);
+  sdk = { app: a, fs: c, auth: b || null };
   return sdk;
 }
 
@@ -101,23 +131,44 @@ export async function init() {
   try {
     const { app: A, auth: U, fs: F } = await loadSdk();
     app = A.getApps().length ? A.getApp() : A.initializeApp(config);
-    auth = U.getAuth(app);
     store = F.initializeFirestore(app, {
       localCache: F.persistentLocalCache({ tabManager: F.persistentMultipleTabManager() }),
       ignoreUndefinedProperties: true,
     });
     const emulator = localStorage.getItem('firebaseEmulator');
-    if (emulator) {
-      const [host, authPort, fsPort] = emulator.split(':');
-      U.connectAuthEmulator(auth, `http://${host}:${authPort}`, { disableWarnings: true });
-      F.connectFirestoreEmulator(store, host, Number(fsPort));
-    }
+    const [host, authPort, fsPort] = (emulator || '').split(':');
+    if (emulator) F.connectFirestoreEmulator(store, host, Number(fsPort));
+
+    if (!requireSignIn) { await attachSpace(); return; }
+
+    auth = U.getAuth(app);
+    if (emulator) U.connectAuthEmulator(auth, `http://${host}:${authPort}`, { disableWarnings: true });
     unsubAuth?.();
     unsubAuth = U.onAuthStateChanged(auth, onUser);
   } catch (err) {
     console.error(err);
     announce({ state: 'error', error: describe(err) });
   }
+}
+
+/**
+ * No-sign-in mode: both phones point at the same fixed path and start
+ * streaming. The first device to connect uploads whatever history it holds.
+ */
+async function attachSpace() {
+  const { fs: F } = sdk;
+  const name = await spaceLabel();
+  announce({ state: 'live', user: null, family: { id: space, name, members: {} }, error: '' });
+  await db.metaSet('familyId', space);
+  // Make the parent document real so the Firestore console shows the tree.
+  F.setDoc(F.doc(store, 'families', space), { name, touchedAt: F.serverTimestamp() }, { merge: true })
+    .catch(err => debug('space doc write skipped:', err.code));
+  startStreams(space);
+  if (await db.metaGet('uploadedTo', null) !== space) {
+    await db.metaSet('uploadedTo', space);
+    await uploadEverything();
+  }
+  schedulePush();
 }
 
 async function onUser(user) {
@@ -315,7 +366,7 @@ export async function signIn(email, password) {
 
 export async function signOutNow() {
   stopStreams();
-  await sdk.auth.signOut(auth);
+  if (auth) await sdk.auth.signOut(auth);
   await db.metaSet('syncWatermark', 0);
   await db.metaSet('familyId', null);
 }

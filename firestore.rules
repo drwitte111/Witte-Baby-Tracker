@@ -1,54 +1,27 @@
 rules_version = '2';
 
-// Witte Baby Tracker — one document tree per family, readable only by its members.
+// Witte Baby Tracker — one shared family log, no sign-in.
+//
+// Both phones (and anyone else who has the app's URL) read and write everything
+// under families/witte. That is the deliberate trade for zero-friction access on
+// two phones; nothing else in the project is reachable.
+//
+// To lock it down later: set REQUIRE_SIGN_IN = true in assets/firebase-config.js,
+// enable Email/Password in the console, and swap `if true` for
+// `if request.auth != null` below.
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function signedIn() { return request.auth != null; }
-    function isMember(fam) { return signedIn() && request.auth.uid in fam.data.memberIds; }
-    function family(id) { return get(/databases/$(database)/documents/families/$(id)); }
-
-    // Which family a signed-in device belongs to. Only that user can read it.
-    match /users/{uid} {
-      allow read, write: if signedIn() && request.auth.uid == uid;
+    match /families/{space} {
+      allow read, write: if space == 'witte';
+      match /{document=**} {
+        allow read, write: if space == 'witte';
+      }
     }
 
-    // Invite codes map a code to a family. Any signed-in user may look one up —
-    // codes are 8 random characters and only reveal a family id — but only a
-    // member of that family may mint or revoke one.
-    match /invites/{code} {
-      allow get: if signedIn();
-      allow list, update: if false;
-      allow create: if signedIn()
-        && request.resource.data.createdBy == request.auth.uid
-        && request.auth.uid in family(request.resource.data.familyId).data.memberIds;
-      allow delete: if signedIn()
-        && request.auth.uid in family(resource.data.familyId).data.memberIds;
-    }
-
-    match /families/{familyId} {
-      allow get: if isMember(resource);
-      allow list, delete: if false;
-
-      allow create: if signedIn()
-        && request.resource.data.memberIds == [request.auth.uid];
-
-      // Members may edit the family. A non-member may add *only themselves*,
-      // and only while an unexpired invite is open.
-      allow update: if isMember(resource)
-        || (signedIn()
-            && resource.data.inviteOpen == true
-            && request.time < resource.data.inviteExpires
-            && request.resource.data.memberIds == resource.data.memberIds.concat([request.auth.uid])
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberIds', 'members']));
-
-      match /events/{eventId} {
-        allow read, write: if isMember(family(familyId));
-      }
-
-      match /meta/{key} {
-        allow read, write: if isMember(family(familyId));
-      }
+    // Everything outside that one path stays closed.
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
