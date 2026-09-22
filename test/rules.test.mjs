@@ -8,7 +8,7 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore, connectFirestoreEmulator, doc, getDoc, setDoc, deleteDoc,
          collection, getDocs } from 'firebase/firestore';
 
-const app = initializeApp({ apiKey: 'demo-key', authDomain: '127.0.0.1', projectId: 'demo-witte', appId: '1:1:web:1' });
+const app = initializeApp({ apiKey: 'demo-key', authDomain: '127.0.0.1', projectId: 'witte-baby-tracker', appId: '1:1:web:1' });
 const fs = getFirestore(app);
 connectFirestoreEmulator(fs, '127.0.0.1', 8080);
 

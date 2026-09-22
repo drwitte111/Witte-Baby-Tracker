@@ -11,7 +11,14 @@
  * and the More screen offers a paste box instead.
  */
 
-export const firebaseConfig = null;
+export const firebaseConfig = {
+  apiKey: "AIzaSyDSP_eosyrG-0H6RGauNka2NLMh5ebmGgs",
+  authDomain: "witte-baby-tracker.firebaseapp.com",
+  projectId: "witte-baby-tracker",
+  storageBucket: "witte-baby-tracker.firebasestorage.app",
+  messagingSenderId: "810934800977",
+  appId: "1:810934800977:web:095120cb68045570ad1e70",
+};
 
 /**
  * The one shared dataset both phones read and write. Everything lives under
