@@ -2,7 +2,7 @@
 import { db } from '../db.js';
 import { T } from '../model.js';
 import { weightLabel, lengthLabel, gramsTo, cmTo, ageFrom, DAY } from '../format.js';
-import { esc } from '../ui.js';
+import { esc, icon } from '../ui.js';
 import { lineChart, vizCard } from '../charts.js';
 import { addEntry, editEntry } from '../forms.js';
 
@@ -13,8 +13,8 @@ export async function render(root, ctx) {
   const u = ctx.state.units;
 
   if (!rows.length) {
-    root.innerHTML = `<p class="empty">No measurements yet.</p>
-      <div class="row"><button class="btn primary wide" data-add="1">+ Add measurement</button></div>`;
+    root.innerHTML = `<div class="empty"><span class="chip-ico tone-growth">${icon('i-ruler')}</span>No measurements yet.</div>
+      <div class="row tone-growth"><button class="btn tone wide" data-add="1">${icon('i-plus', 'sm')}Add measurement</button></div>`;
     root.addEventListener('click', e => { if (e.target.closest('[data-add]')) addEntry(T.GROWTH, ctx); });
     return;
   }
@@ -35,9 +35,10 @@ export async function render(root, ctx) {
     { key: 'headCm', title: 'Head circumference', color: 'var(--series-3)', fmt: v => `${v.toFixed(0)}${u.length}`, conv: v => cmTo(v, u.length), label: v => lengthLabel(v, u.length) },
   ];
 
-  let html = `<section class="card">
-    <div class="card-head"><span class="card-title">Latest · ${esc(dateShort(latest.start))}</span>
-      <span class="muted">${esc(ageFrom(ctx.state.profile?.birth, latest.start))}</span></div>
+  let html = `<section class="card tone-growth">
+    <div class="card-head"><span class="chip-ico">${icon('i-ruler')}</span>
+      <span class="card-title">Latest · ${esc(dateShort(latest.start))}</span>
+      <span class="meta">${esc(ageFrom(ctx.state.profile?.birth, latest.start))}</span></div>
     <div class="grid2">
       <div class="stat"><b>${esc(weightLabel(latest.weightG, u.weight))}</b><span>weight</span></div>
       <div class="stat"><b>${esc(lengthLabel(latest.heightCm, u.length))}</b><span>length</span></div>
@@ -45,7 +46,7 @@ export async function render(root, ctx) {
       <div class="stat"><b>${rows.length}</b><span>measurements</span></div>
     </div>
     ${gain ? `<p class="sub">${esc(gain)}</p>` : ''}
-    <div class="row"><button class="btn primary wide" data-add="1">+ Add measurement</button></div>
+    <div class="row"><button class="btn tone wide" data-add="1">${icon('i-plus', 'sm')}Add measurement</button></div>
   </section>`;
 
   for (const s of series) {

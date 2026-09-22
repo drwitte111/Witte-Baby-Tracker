@@ -35,9 +35,12 @@ function bodyFor(type, ev, units) {
         ${noteField(ev.note)}`;
     case T.DIAPER: {
       const kind = ev.wet && ev.dirty ? 'both' : ev.dirty ? 'dirty' : ev.wet ? 'wet' : 'dry';
-      return `<label class="field"><span>Contents</span><select name="kind">
-          ${opt('wet', kind, 'Wet')}${opt('dirty', kind, 'Dirty')}${opt('both', kind, 'Wet + dirty')}${opt('dry', kind, 'Dry')}
-        </select></label>
+      return `<label class="field"><span>Contents</span></label>
+        <input type="hidden" name="kind" value="${kind}">
+        <div class="seg" data-seg="kind">
+          ${[['wet', 'Wet'], ['dirty', 'Dirty'], ['both', 'Both'], ['dry', 'Dry']].map(([v, l]) =>
+            `<button type="button" data-v="${v}" aria-pressed="${kind === v}">${l}</button>`).join('')}
+        </div>
         <div class="field-row">
           <label class="field"><span>Color</span><select name="color">
             ${opt('', ev.color || '', '—')}${DIAPER_COLORS.map(c => opt(c, ev.color || '', c.toLowerCase())).join('')}
@@ -46,7 +49,7 @@ function bodyFor(type, ev, units) {
             ${opt('', ev.texture || '', '—')}${DIAPER_TEXTURES.map(c => opt(c, ev.texture || '', c.toLowerCase())).join('')}
           </select></label>
         </div>
-        <label class="field"><span><input type="checkbox" name="blowout" style="width:auto;min-height:0;margin-right:8px"${ev.blowout ? ' checked' : ''}>Blowout</span></label>
+        <label class="toggle">Blowout<input type="checkbox" name="blowout"${ev.blowout ? ' checked' : ''}></label>
         ${timeField('start', ev.start)}
         ${noteField(ev.note)}`;
     }
@@ -119,12 +122,27 @@ function collect(type, root, ev, units) {
   return patch;
 }
 
+// Segmented controls: buttons write into the hidden input collect() reads.
+function wireSegments(root) {
+  root.querySelectorAll('[data-seg]').forEach(seg => {
+    const input = root.querySelector(`[name="${seg.dataset.seg}"]`);
+    seg.addEventListener('click', e => {
+      const b = e.target.closest('button[data-v]');
+      if (!b) return;
+      seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+      input.value = b.dataset.v;
+    });
+  });
+}
+
 /** Add sheet. Returns the saved event, or null. */
 export async function addEntry(type, ctx, prefill = {}) {
-  const draft = makeEvent(type, { caregiver: ctx.state.caregiver, ...prefill });
+  const defaults = type === T.DIAPER ? { wet: true } : {};       // the common case, one tap fewer
+  const draft = makeEvent(type, { caregiver: ctx.state.caregiver, ...defaults, ...prefill });
   const saved = await sheet({
     title: `Add ${TYPE_META[type].label.toLowerCase()}`,
     body: bodyFor(type, draft, ctx.state.units),
+    onMount: wireSegments,
     actions: [{
       label: 'Save', cls: 'primary',
       onClick: root => {
@@ -144,6 +162,7 @@ export async function editEntry(ev, ctx) {
   const saved = await sheet({
     title: `Edit ${TYPE_META[ev.type]?.label.toLowerCase() || 'entry'}`,
     body: bodyFor(ev.type, ev, ctx.state.units),
+    onMount: wireSegments,
     actions: [
       {
         label: 'Save', cls: 'primary',
