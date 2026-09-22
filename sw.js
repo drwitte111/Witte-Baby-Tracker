@@ -1,7 +1,8 @@
 // Cache-first shell so the app opens offline; the network refreshes it in the background.
-const CACHE = 'witte-baby-v2';
+const CACHE = 'witte-baby-v3';
 const SHELL = [
   './', './index.html', './assets/styles.css', './assets/icon.svg',
+  './assets/icon-180.png', './assets/icon-192.png',
   './manifest.webmanifest',
   './js/app.js', './js/db.js', './js/ui.js', './js/model.js', './js/format.js',
   './js/csv.js', './js/charts.js', './js/forms.js', './js/sync.js',

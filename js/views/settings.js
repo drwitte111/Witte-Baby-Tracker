@@ -2,7 +2,7 @@
 import { db } from '../db.js';
 import { fromNaraCsv, toNaraCsv } from '../csv.js';
 import { T } from '../model.js';
-import { esc, toast, confirm, download } from '../ui.js';
+import { esc, toast, confirm, shareOrDownload } from '../ui.js';
 import { toDateInput, ageFrom } from '../format.js';
 import { syncCard, wireSync } from './sync-ui.js';
 import { sync, pushNow } from '../sync.js';
@@ -49,7 +49,7 @@ export async function render(root, ctx) {
       <label class="btn" style="text-align:center;line-height:26px">Import CSV
         <input type="file" accept=".csv,text/csv" id="import-file" style="display:none">
       </label>
-      <button class="btn" data-act="export">Export CSV</button>
+      <button class="btn" data-act="export">Share / export CSV</button>
     </div>
     <div id="import-status">${lastImport ? `<p class="banner">${esc(lastImport.summary)}</p>` : ''}</div>
     <div class="row"><button class="btn danger wide" data-act="wipe">Delete all data</button></div>
@@ -151,8 +151,8 @@ export async function render(root, ctx) {
       const csv = toNaraCsv(all, ctx.state.profile, ctx.state.units);
       const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
       const who = (ctx.state.profile?.name || 'baby').toLowerCase().replace(/\W+/g, '');
-      download(`export_wittebaby_${who}_${stamp}.csv`, csv);
-      toast(`Exported ${all.length} entries`);
+      const how = await shareOrDownload(`export_wittebaby_${who}_${stamp}.csv`, csv);
+      if (how !== 'cancelled') toast(`Exported ${all.length} entries`);
     }
 
     if (act === 'wipe') {
