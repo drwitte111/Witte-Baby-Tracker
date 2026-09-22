@@ -66,6 +66,15 @@ const ctx = {
   },
   async setUnits(v) { state.units = v; await db.metaSet('units', v); await markMetaDirty('units'); ctx.refresh(); },
   async setCaregiver(v) { state.caregiver = v; await db.metaSet('caregiver', v); },
+  /** Per-phone colour look: 'default' | 'girl' | 'boy'. */
+  setLook(look) {
+    if (!LOOKS.includes(look)) return;
+    localStorage.setItem('look', look);
+    if (look === 'default') delete document.documentElement.dataset.look;
+    else document.documentElement.dataset.look = look;
+    state.look = look;
+  },
+  get look() { return localStorage.getItem('look') || 'default'; },
 };
 
 // Keep the screen on while a feed timer runs (but never through a night's sleep).
@@ -260,15 +269,31 @@ function startTicker() {
   requestAnimationFrame(loop);
 }
 
+const LOOKS = ['default', 'girl', 'boy'];
+
+// [data-dark] mirrors the scheme actually in effect (toggle beats OS), so the
+// look overrides can key on one attribute.
+function paintScheme() {
+  const dark = document.documentElement.dataset.theme
+    ? document.documentElement.dataset.theme === 'dark'
+    : matchMedia('(prefers-color-scheme: dark)').matches;
+  document.documentElement.dataset.dark = dark ? '1' : '';
+}
+
 function initTheme() {
   const saved = localStorage.getItem('theme');
   if (saved) document.documentElement.dataset.theme = saved;
+  const look = localStorage.getItem('look');
+  if (LOOKS.includes(look) && look !== 'default') document.documentElement.dataset.look = look;
+  paintScheme();
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', paintScheme);
   document.getElementById('theme-toggle').addEventListener('click', () => {
     const cur = document.documentElement.dataset.theme
       || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
     const next = cur === 'dark' ? 'light' : 'dark';
     document.documentElement.dataset.theme = next;
     localStorage.setItem('theme', next);
+    paintScheme();
   });
 }
 

@@ -31,6 +31,7 @@
   --c-sleep:       var(--series-1);  --c-sleep-fill:  #2a6fc4;
   --c-diaper:      var(--series-3);  --c-diaper-fill: #12926a;
   --c-growth:      var(--series-7);  --c-growth-fill: #4a3aa7;
+  --c-awake:       #e09a00;          --c-awake-fill:  #b97e00;   /* sun: she is up */
   --c-neutral:     var(--text-secondary);
 
   --shadow-1: 0 1px 2px rgba(20,20,16,.05), 0 2px 8px rgba(20,20,16,.05);
@@ -59,6 +60,7 @@
     --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-7: #9085e9;
     --grid:     #2c2c29;
     --c-feed-fill:  #d95926; --c-sleep-fill: #3987e5; --c-diaper-fill: #1a9c6e; --c-growth-fill: #6b5ed0;
+    --c-awake: #f0b429; --c-awake-fill: #c98500;
     --shadow-1: 0 1px 2px rgba(0,0,0,.4), 0 2px 8px rgba(0,0,0,.35);
     --shadow-2: 0 2px 6px rgba(0,0,0,.45), 0 14px 32px rgba(0,0,0,.45);
   }
@@ -78,6 +80,7 @@
   --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-7: #9085e9;
   --grid:     #2c2c29;
   --c-feed-fill:  #d95926; --c-sleep-fill: #3987e5; --c-diaper-fill: #1a9c6e; --c-growth-fill: #6b5ed0;
+  --c-awake: #f0b429; --c-awake-fill: #c98500;
   --shadow-1: 0 1px 2px rgba(0,0,0,.4), 0 2px 8px rgba(0,0,0,.35);
   --shadow-2: 0 2px 6px rgba(0,0,0,.45), 0 14px 32px rgba(0,0,0,.45);
 }
@@ -115,6 +118,10 @@ button, .tab, .chip, .entry, .stat, label.field > span {
 .tone-sleep  { --tone: var(--c-sleep);  --tone-fill: var(--c-sleep-fill); }
 .tone-diaper { --tone: var(--c-diaper); --tone-fill: var(--c-diaper-fill); }
 .tone-growth { --tone: var(--c-growth); --tone-fill: var(--c-growth-fill); }
+.tone-awake  { --tone: var(--c-awake);  --tone-fill: var(--c-awake-fill); }
+/* the sleep card is always a status: warm while she is up, blue while she sleeps */
+.card.awake { background: color-mix(in srgb, var(--c-awake) 7%, var(--surface-1)); border-color: color-mix(in srgb, var(--c-awake) 28%, var(--border)); }
+.card.awake .since { color: var(--c-awake-fill); }
 .tone-neutral{ --tone: var(--c-neutral);--tone-fill: var(--text-secondary); }
 .tone-accent { --tone: var(--accent);   --tone-fill: var(--accent); }
 
@@ -415,3 +422,131 @@ html[data-nav="prev"]::view-transition-new(root) { animation: slide-in-left .22s
   ::view-transition-old(root), ::view-transition-new(root),
   html[data-nav]::view-transition-old(root), html[data-nav]::view-transition-new(root) { animation: none; }
 }
+
+/* =====================================================================
+   Looks. Default is everything above. Girl and Boy swap only the colour
+   tokens — layout, icons and behaviour are identical. Chosen per phone in
+   More; [data-dark] is the effective scheme, set by app.js.
+   ===================================================================== */
+.avatar { background: linear-gradient(145deg, var(--avatar-a, var(--c-growth)), var(--avatar-b, var(--c-sleep))); }
+
+:root[data-look="girl"] {
+  --bg: #faf3f5; --surface-1: #ffffff; --surface-2: #f8eef1; --surface-3: #efdfe5;
+  --border: rgba(120,40,70,.10); --hairline: rgba(120,40,70,.07);
+  --accent: #d6336c;
+  --series-1: #7c6fd6; --series-2: #e8603c; --series-3: #2fa882; --series-7: #b0448f; --grid: #efe3e8;
+  --c-sleep-fill: #6a5dc9; --c-feed-fill: #d4522f; --c-diaper-fill: #1f8f6d; --c-growth-fill: #9a3a7c;
+  --c-awake: #e0961a; --c-awake-fill: #b57600;
+  --avatar-a: #e2588a; --avatar-b: #8c7ae6;
+}
+:root[data-look="girl"][data-dark="1"] {
+  --bg: #171214; --surface-1: #211a1e; --surface-2: #2b2227; --surface-3: #372b31;
+  --border: rgba(255,200,220,.10); --hairline: rgba(255,200,220,.07);
+  --accent: #ef5a8f;
+  --series-1: #8a7de6; --series-2: #e0663f; --series-3: #29a67d; --series-7: #c75aa5; --grid: #33272d;
+  --c-sleep-fill: #7f72e0; --c-feed-fill: #d95a34; --c-diaper-fill: #24997a; --c-growth-fill: #b04c94;
+  --c-awake: #f0b040; --c-awake-fill: #c98500;
+  --avatar-a: #f06a9c; --avatar-b: #9d8cf2;
+}
+
+:root[data-look="boy"] {
+  --bg: #eff3f8; --surface-1: #ffffff; --surface-2: #eef2f7; --surface-3: #dfe6ee;
+  --border: rgba(20,50,90,.10); --hairline: rgba(20,50,90,.07);
+  --accent: #1f5fbf;
+  --series-1: #3457c9; --series-2: #e8602f; --series-3: #16a88a; --series-7: #0f8a8a; --grid: #e1e8f0;
+  --c-sleep-fill: #2c4bb5; --c-feed-fill: #d3522a; --c-diaper-fill: #128a70; --c-growth-fill: #0c7373;
+  --c-awake: #e0a000; --c-awake-fill: #b58200;
+  --avatar-a: #17a2b8; --avatar-b: #1f3c88;
+}
+:root[data-look="boy"][data-dark="1"] {
+  --bg: #0e1218; --surface-1: #161c25; --surface-2: #1e2631; --surface-3: #28323f;
+  --border: rgba(160,190,230,.10); --hairline: rgba(160,190,230,.07);
+  --accent: #4c86e8;
+  --series-1: #5b7ae8; --series-2: #dd5b2c; --series-3: #1f9c7e; --series-7: #2aa3a3; --grid: #232d3a;
+  --c-sleep-fill: #4d6fe0; --c-feed-fill: #cf5228; --c-diaper-fill: #1d8f74; --c-growth-fill: #1f8f8f;
+  --c-awake: #f0b429; --c-awake-fill: #c98500;
+  --avatar-a: #2cc0d6; --avatar-b: #3b5bd0;
+}
+
+/* look picker */
+.looks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.look {
+  border: 1.5px solid var(--border); border-radius: 15px; background: var(--surface-2); cursor: pointer;
+  padding: 10px 8px 9px; display: flex; flex-direction: column; align-items: center; gap: 7px; font-weight: 600; font-size: 14px;
+}
+.look.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, var(--surface-1)); }
+.look .sw { display: flex; gap: 3px; }
+.look .sw i { width: 14px; height: 14px; border-radius: 50%; display: block; }
+
+/* ---- Girl: soft, round, playful ------------------------------------------------ */
+:root[data-look="girl"] {
+  --r-card: 28px; --r-btn: 999px;
+  --shadow-1: 0 1px 2px rgba(120,40,70,.06), 0 4px 14px rgba(120,40,70,.08);
+  --shadow-2: 0 2px 8px rgba(120,40,70,.10), 0 16px 36px rgba(120,40,70,.14);
+}
+:root[data-look="girl"][data-dark="1"] {
+  --shadow-1: 0 1px 2px rgba(0,0,0,.45), 0 4px 14px rgba(0,0,0,.4);
+  --shadow-2: 0 2px 8px rgba(0,0,0,.5), 0 16px 36px rgba(0,0,0,.5);
+}
+:root[data-look="girl"] body {
+  font-family: ui-rounded, -apple-system, "SF Pro Rounded", "Nunito", "Segoe UI", Roboto, sans-serif;
+  background-image: radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--accent) 14%, transparent) 1.3px, transparent 1.8px);
+  background-size: 18px 18px;
+}
+:root[data-look="girl"] .topbar h1, :root[data-look="girl"] .since, :root[data-look="girl"] .timer .big,
+:root[data-look="girl"] .stat b, :root[data-look="girl"] .ribbon b, :root[data-look="girl"] .card-title,
+:root[data-look="girl"] .viz h3, :root[data-look="girl"] .sheet h2 { font-weight: 800; letter-spacing: -.01em; }
+:root[data-look="girl"] .chip-ico { border-radius: 50%; }
+:root[data-look="girl"] .avatar { box-shadow: 0 0 0 3px var(--surface-1), 0 0 0 5px color-mix(in srgb, var(--accent) 45%, transparent); }
+:root[data-look="girl"] .btn { border-radius: 999px; }
+:root[data-look="girl"] .btn.tone, :root[data-look="girl"] .btn.primary { box-shadow: 0 6px 14px color-mix(in srgb, var(--tone-fill, var(--accent)) 30%, transparent); }
+:root[data-look="girl"] .card { border-width: 0; }
+:root[data-look="girl"] .card.active, :root[data-look="girl"] .card.awake { border-width: 1px; }
+:root[data-look="girl"] .stat, :root[data-look="girl"] .baby, :root[data-look="girl"] .entry { border-radius: 20px; }
+:root[data-look="girl"] .entry::before { border-radius: 50%; width: 11px; height: 11px; margin-top: -5.5px; }
+:root[data-look="girl"] .tab[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 999px; }
+:root[data-look="girl"] .tabbar { border-top: 0; }
+:root[data-look="girl"] .ribbon { border-radius: 999px; }
+:root[data-look="girl"] .ribbon > div:first-child { padding-left: 14px; }
+:root[data-look="girl"] .ribbon > div:last-child { padding-right: 14px; }
+:root[data-look="girl"] input, :root[data-look="girl"] select, :root[data-look="girl"] textarea { border-radius: 18px; }
+:root[data-look="girl"] .seg { border-radius: 999px; }
+:root[data-look="girl"] .seg button { border-radius: 999px; }
+
+/* ---- Boy: crisp, sporty, structured --------------------------------------------- */
+:root[data-look="boy"] {
+  --r-card: 14px; --r-btn: 10px;
+  --shadow-1: 0 1px 1px rgba(20,50,90,.06), 0 2px 6px rgba(20,50,90,.06);
+  --shadow-2: 0 2px 4px rgba(20,50,90,.08), 0 10px 24px rgba(20,50,90,.10);
+}
+:root[data-look="boy"] body {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--accent) 7%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--accent) 7%, transparent) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+:root[data-look="boy"] .card { border-left: 4px solid var(--tone, var(--border)); }
+:root[data-look="boy"] .card.tone-neutral { border-left-color: var(--surface-3); }
+:root[data-look="boy"] .card-title { text-transform: uppercase; letter-spacing: .08em; font-size: 12.5px; font-weight: 750; }
+:root[data-look="boy"] .viz h3 { text-transform: uppercase; letter-spacing: .06em; font-size: 13px; }
+:root[data-look="boy"] .chip-ico { border-radius: 7px; }
+:root[data-look="boy"] .chip-ico.sm { border-radius: 6px; }
+:root[data-look="boy"] .avatar { border-radius: 11px; }
+:root[data-look="boy"] .since, :root[data-look="boy"] .timer .big, :root[data-look="boy"] .ribbon b, :root[data-look="boy"] .stat b { letter-spacing: -.03em; font-weight: 800; }
+:root[data-look="boy"] .btn { border-radius: 10px; text-transform: uppercase; letter-spacing: .04em; font-size: 13.5px; font-weight: 700; }
+:root[data-look="boy"] .btn.ghost { text-transform: none; letter-spacing: 0; font-size: 15px; font-weight: 560; }
+:root[data-look="boy"] .chip, :root[data-look="boy"] .pill, :root[data-look="boy"] .badge { border-radius: 7px; }
+:root[data-look="boy"] .row.adjust .chip { border-radius: 8px; }
+:root[data-look="boy"] .stat, :root[data-look="boy"] .baby, :root[data-look="boy"] .entry { border-radius: 10px; }
+:root[data-look="boy"] .entry { border-left: 3px solid var(--tone); }
+:root[data-look="boy"] .entry::before { border-radius: 2px; width: 8px; height: 8px; margin-top: -4px; }
+:root[data-look="boy"] .timeline::before { display: none; }
+:root[data-look="boy"] .timeline { padding-left: 0; }
+:root[data-look="boy"] .entry::before { display: none; }
+:root[data-look="boy"] .tab { border-radius: 0; border-top: 2px solid transparent; margin-top: -6px; padding-top: 10px; }
+:root[data-look="boy"] .tab[aria-selected="true"] { border-top-color: var(--accent); background: none; }
+:root[data-look="boy"] .ribbon { border-radius: 12px; }
+:root[data-look="boy"] .ribbon span { text-transform: uppercase; letter-spacing: .05em; font-size: 10px; }
+:root[data-look="boy"] input, :root[data-look="boy"] select, :root[data-look="boy"] textarea { border-radius: 9px; }
+:root[data-look="boy"] .seg, :root[data-look="boy"] .seg button { border-radius: 8px; }
+:root[data-look="boy"] .sheet { border-radius: 16px 16px 0 0; }

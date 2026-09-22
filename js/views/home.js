@@ -50,7 +50,7 @@ export async function render(root, ctx) {
   const sleepToday = sleptToday.day + sleptToday.night + (sleeping ? sleepElapsed(sleeping, now) : 0);
   const ribbon = `<section class="ribbon" aria-label="Today so far">
     <div class="tone-feed">${icon('i-feed', 'sm')}<b>${today.feeds}</b><span>feeds · ${dur(today.feedSec)}</span></div>
-    <div class="tone-sleep">${icon('i-sleep', 'sm')}<b>${sleepToday < 60 ? '0m' : dur(sleepToday)}</b><span>sleep today</span></div>
+    <div class="${sleeping ? 'tone-sleep' : 'tone-awake'}">${icon(sleeping ? 'i-sleep' : 'i-sun', 'sm')}<b>${sleepToday < 60 ? '0m' : dur(sleepToday)}</b><span>sleep today</span></div>
     <div class="tone-diaper">${icon('i-diaper', 'sm')}<b>${today.diapers}</b><span>${today.wet + today.both} wet · ${today.dirty + today.both} dirty</span></div>
   </section>`;
 
@@ -109,11 +109,12 @@ export async function render(root, ctx) {
     </section>`;
   } else {
     const finished = lastSleep;
-    sleepCard = `<section class="card tone-sleep" id="sleep-card">
-      ${head('sleep', 'i-sleep', 'Sleep', finished ? `up since ${esc(time(finished.end))}` : '')}
+    // Awake: sun, amber, warm card. Asleep (above): moon, blue, pulse. Unmistakable at a glance.
+    sleepCard = `<section class="card awake tone-awake" id="sleep-card">
+      ${head('awake', 'i-sun', 'Awake', finished ? `up since ${esc(time(finished.end))}` : '')}
       <div class="since" data-live="wake-since" data-mode="elapsed" data-start="${finished ? finished.end : ''}">${finished ? dur((now - finished.end) / 1000) : 'No sleep logged'}</div>
       <p class="sub">${finished ? `awake · last sleep ${dur(sleepSeconds(finished))}` : 'Start the timer when baby goes down'}</p>
-      <div class="row">
+      <div class="row tone-sleep">
         <button class="btn tone" data-act="sleep-start">${icon('i-sleep')}Start sleep</button>
         <button class="btn ghost" data-act="sleep-manual">${icon('i-plus', 'sm')}Past sleep</button>
       </div>

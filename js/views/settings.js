@@ -32,6 +32,26 @@ function babiesCard(ctx, v) {
   </section>`;
 }
 
+const LOOK_OPTIONS = [
+  { id: 'default', label: 'Default', sw: ['#2a78d6', '#eb6834', '#1baf7a', '#4a3aa7'] },
+  { id: 'girl',    label: 'Girl',    sw: ['#d6336c', '#7c6fd6', '#e8603c', '#b0448f'] },
+  { id: 'boy',     label: 'Boy',     sw: ['#1f5fbf', '#3457c9', '#e8602f', '#0f8a8a'] },
+];
+
+function lookCard(ctx, v) {
+  const cur = ctx.look;
+  return `
+  <section class="card tone-accent">
+    <div class="card-head"><span class="chip-ico">${icon('i-theme')}</span><span class="card-title">Look</span>
+      <span class="meta">this phone</span></div>
+    <div class="looks">
+      ${LOOK_OPTIONS.map(o => `<button class="look ${o.id === cur ? 'on' : ''}" data-act="set-look" data-look="${o.id}" aria-pressed="${o.id === cur}">
+        <span class="sw">${o.sw.map(c => `<i style="background:${c}"></i>`).join('')}</span>${o.label}</button>`).join('')}
+    </div>
+    <p class="sub" style="margin-top:10px">Same layout and buttons — Girl is soft and round, Boy is crisp and sporty. Light and dark follow the toggle at the top.</p>
+  </section>`;
+}
+
 function unitsCard(ctx, v) {
   return `
   <section class="card tone-neutral">
@@ -88,7 +108,7 @@ export async function render(root, ctx) {
     u: ctx.state.units,
   };
 
-  root.innerHTML = [babiesCard, unitsCard, dataCard, () => syncCard(), appCard]
+  root.innerHTML = [babiesCard, lookCard, unitsCard, dataCard, () => syncCard(), appCard]
     .map(f => f(ctx, view)).join('');
 
   wireSync(root, ctx);
@@ -179,6 +199,14 @@ export async function render(root, ctx) {
       await ctx.setCaregiver(root.querySelector('[name=caregiver]').value.trim());
       toast('Saved');
       ctx.refresh();
+    }
+
+    if (act === 'set-look') {
+      ctx.setLook(e.target.closest('[data-look]').dataset.look);
+      root.querySelectorAll('.look').forEach(b => {
+        const on = b.dataset.look === ctx.look;
+        b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on));
+      });
     }
 
     if (act === 'select-baby') {
