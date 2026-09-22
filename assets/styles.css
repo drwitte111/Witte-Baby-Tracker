@@ -394,8 +394,23 @@ code { font-size: 12.5px; background: var(--surface-2); padding: 1px 5px; border
 .install-hint button { background: none; border: 0; color: var(--text-muted); display: grid; place-items: center; padding: 0; cursor: pointer; }
 
 @view-transition { navigation: none; }
+/* chrome holds still; only the page content transitions */
+.topbar { view-transition-name: chrome-top; }
+.tabbar { view-transition-name: chrome-bottom; }
 ::view-transition-old(root) { animation: vt-out .14s ease-in both; }
 ::view-transition-new(root) { animation: vt-in .18s ease-out both; }
+/* a swipe slides the page the way the finger went */
+html[data-nav="next"]::view-transition-old(root) { animation: slide-out-left .18s ease-in both; }
+html[data-nav="next"]::view-transition-new(root) { animation: slide-in-right .22s var(--ease) both; }
+html[data-nav="prev"]::view-transition-old(root) { animation: slide-out-right .18s ease-in both; }
+html[data-nav="prev"]::view-transition-new(root) { animation: slide-in-left .22s var(--ease) both; }
 @keyframes vt-out { to { opacity: 0 } }
 @keyframes vt-in { from { opacity: 0; transform: translateY(6px) } }
-@media (prefers-reduced-motion: reduce) { ::view-transition-old(root), ::view-transition-new(root) { animation: none; } }
+@keyframes slide-out-left  { to   { opacity: 0; transform: translateX(-40px) } }
+@keyframes slide-in-right  { from { opacity: 0; transform: translateX(40px) } }
+@keyframes slide-out-right { to   { opacity: 0; transform: translateX(40px) } }
+@keyframes slide-in-left   { from { opacity: 0; transform: translateX(-40px) } }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root), ::view-transition-new(root),
+  html[data-nav]::view-transition-old(root), html[data-nav]::view-transition-new(root) { animation: none; }
+}
