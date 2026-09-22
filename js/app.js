@@ -58,8 +58,10 @@ function currentRoute() {
 }
 
 function paintHeader() {
-  document.getElementById('profile-name').textContent = state.profile?.name || 'Baby Tracker';
+  const name = state.profile?.name || '';
+  document.getElementById('profile-name').textContent = name || 'Baby Tracker';
   document.getElementById('profile-age').textContent = ageFrom(state.profile?.birth);
+  document.getElementById('profile-avatar').textContent = (name.trim()[0] || '•').toUpperCase();
 }
 
 async function paintRoute(route) {
@@ -100,9 +102,10 @@ function maybeShowInstallHint(root, route) {
   if (!iOS || standalone || localStorage.getItem('installHintDismissed')) return;
   const hint = document.createElement('div');
   hint.className = 'install-hint';
-  hint.innerHTML = `<span>📲</span><span><b>Add to Home Screen</b> — tap Share, then
-    “Add to Home Screen”. It runs full screen, works offline, and keeps its data safely.</span>
-    <button type="button" aria-label="Dismiss">×</button>`;
+  hint.innerHTML = `<span class="chip-ico sm tone-accent"><svg class="ico"><use href="#i-share"/></svg></span>
+    <span><b>Add to Home Screen</b> — tap Share, then “Add to Home Screen”. It runs full screen,
+    works offline, and keeps its data safely.</span>
+    <button type="button" aria-label="Dismiss"><svg class="ico sm"><use href="#i-close"/></svg></button>`;
   hint.querySelector('button').addEventListener('click', () => {
     localStorage.setItem('installHintDismissed', '1');
     hint.remove();

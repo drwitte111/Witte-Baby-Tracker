@@ -2,7 +2,7 @@
 import { db } from '../db.js';
 import { fromNaraCsv, toNaraCsv } from '../csv.js';
 import { T } from '../model.js';
-import { esc, toast, confirm, shareOrDownload } from '../ui.js';
+import { esc, icon, toast, confirm, shareOrDownload } from '../ui.js';
 import { toDateInput, ageFrom } from '../format.js';
 import { syncCard, wireSync } from './sync-ui.js';
 import { sync, pushNow } from '../sync.js';
@@ -14,18 +14,18 @@ export async function render(root, ctx) {
   const u = ctx.state.units;
 
   root.innerHTML = `
-  <section class="card">
-    <div class="card-head"><span class="card-title">Baby</span>
-      <span class="muted">${esc(ageFrom(p.birth))}</span></div>
+  <section class="card tone-growth">
+    <div class="card-head"><span class="chip-ico">${icon('i-ruler')}</span><span class="card-title">Baby</span>
+      <span class="meta">${esc(ageFrom(p.birth))}</span></div>
     <label class="field"><span>Name</span><input name="name" value="${esc(p.name || '')}" placeholder="Baby"></label>
     <label class="field"><span>Birth date</span><input type="date" name="birth" value="${p.birth ? toDateInput(p.birth) : ''}"></label>
     <label class="field"><span>Your name <span class="muted">(saved on entries you add)</span></span>
       <input name="caregiver" value="${esc(ctx.state.caregiver || '')}" placeholder="e.g. Alaina"></label>
-    <div class="row"><button class="btn primary wide" data-act="save-profile">Save</button></div>
+    <div class="row"><button class="btn tone wide" data-act="save-profile">${icon('i-check', 'sm')}Save</button></div>
   </section>
 
-  <section class="card">
-    <div class="card-head"><span class="card-title">Units</span></div>
+  <section class="card tone-neutral">
+    <div class="card-head"><span class="chip-ico">${icon('i-more')}</span><span class="card-title">Units</span></div>
     <div class="field-row">
       <label class="field"><span>Weight</span><select name="uw">
         <option value="lb"${u.weight === 'lb' ? ' selected' : ''}>lb / oz</option>
@@ -42,14 +42,15 @@ export async function render(root, ctx) {
     </div>
   </section>
 
-  <section class="card">
-    <div class="card-head"><span class="card-title">Data</span><span class="muted">${count} entries</span></div>
+  <section class="card tone-accent">
+    <div class="card-head"><span class="chip-ico">${icon('i-share')}</span><span class="card-title">Data</span>
+      <span class="meta">${count} entries</span></div>
     <p class="sub">Import your Nara Baby export to bring history across; export writes the same format back. Without sync turned on, data stays on this device only.</p>
     <div class="row">
-      <label class="btn" style="text-align:center;line-height:26px">Import CSV
+      <label class="btn">${icon('i-plus', 'sm')}Import CSV
         <input type="file" accept=".csv,text/csv" id="import-file" style="display:none">
       </label>
-      <button class="btn" data-act="export">Share / export CSV</button>
+      <button class="btn" data-act="export">${icon('i-share', 'sm')}Export</button>
     </div>
     <div id="import-status">${lastImport ? `<p class="banner">${esc(lastImport.summary)}</p>` : ''}</div>
     <div class="row"><button class="btn danger wide" data-act="wipe">Delete all data</button></div>
@@ -57,8 +58,8 @@ export async function render(root, ctx) {
 
   ${syncCard()}
 
-  <section class="card">
-    <div class="card-head"><span class="card-title">App</span></div>
+  <section class="card tone-neutral">
+    <div class="card-head"><span class="chip-ico">${icon('i-home')}</span><span class="card-title">App</span></div>
     <p class="sub">Add to your home screen for a full-screen, offline-capable app: in Safari tap Share → Add to Home Screen; in Chrome use the install prompt in the address bar.</p>
     <p class="sub" style="margin-top:8px" id="storage-line"></p>
   </section>`;

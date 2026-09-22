@@ -2,7 +2,7 @@
 import { db } from '../db.js';
 import { T, byDay, sleepSecondsPerDay, summarizeDay, feedSeconds, sleepSeconds } from '../model.js';
 import { DAY, startOfDay, dur, time, dateLong } from '../format.js';
-import { esc } from '../ui.js';
+import { esc, icon } from '../ui.js';
 import { barChart, stackedBarChart, rhythmChart, vizCard } from '../charts.js';
 
 let days = 7;
@@ -94,13 +94,13 @@ export async function render(root, ctx) {
   const longest = sleeps.reduce((best, s) => sleepSeconds(s) > (best ? sleepSeconds(best) : 0) && s.start >= from ? s : best, null);
 
   let html = `<div class="chips">${chips}</div>
-  <section class="card">
-    <div class="card-head"><span class="card-title">Daily average</span><span class="muted">last ${days} days</span></div>
+  <section class="card tone-accent">
+    <div class="card-head"><span class="chip-ico">${icon('i-stats')}</span><span class="card-title">Daily average</span><span class="meta">last ${days} days</span></div>
     <div class="grid2">
-      <div class="stat"><b>${(totalSleep / days).toFixed(1)}h</b><span>sleep per day</span></div>
-      <div class="stat"><b>${(totalFeeds / days).toFixed(1)}</b><span>feeds per day</span></div>
-      <div class="stat"><b>${dur(totalFeedSec / Math.max(1, totalFeeds))}</b><span>per feed</span></div>
-      <div class="stat"><b>${(totalDiapers / days).toFixed(1)}</b><span>diapers per day</span></div>
+      <div class="stat tone-sleep"><b>${icon('i-sleep')}${(totalSleep / days).toFixed(1)}h</b><span>sleep per day</span></div>
+      <div class="stat tone-feed"><b>${icon('i-feed')}${(totalFeeds / days).toFixed(1)}</b><span>feeds per day</span></div>
+      <div class="stat tone-feed"><b>${icon('i-clock')}${dur(totalFeedSec / Math.max(1, totalFeeds))}</b><span>per feed</span></div>
+      <div class="stat tone-diaper"><b>${icon('i-diaper')}${(totalDiapers / days).toFixed(1)}</b><span>diapers per day</span></div>
     </div>
     ${longest ? `<p class="sub">Longest stretch ${dur(sleepSeconds(longest))} starting ${time(longest.start)} on ${esc(dateLong(longest.start))}</p>` : ''}
   </section>`;

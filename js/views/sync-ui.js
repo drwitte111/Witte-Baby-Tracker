@@ -2,7 +2,7 @@
 import { sync, onSyncChange, setConfig, clearConfig, parseConfig, isBaked, needsSignIn,
          signUp, signIn, signOutNow, createFamily, joinFamily, uploadEverything,
          createInvite, revokeInvites, pushNow, init as initSync } from '../sync.js';
-import { esc, toast, confirm, sheet } from '../ui.js';
+import { esc, icon, toast, confirm, sheet } from '../ui.js';
 import { ago } from '../format.js';
 
 const STATUS = {
@@ -20,9 +20,9 @@ export function syncCard() {
 
   // Without sign-in there is no account or family to manage — just a connection.
   if (!needsSignIn() && sync.state === 'live') {
-    return `<section class="card" id="sync-card">
-      <div class="card-head"><span class="card-title">Sync</span>
-        <span class="muted">${s.dot} ${esc(s.text)}</span></div>
+    return `<section class="card tone-sleep" id="sync-card">
+      <div class="card-head"><span class="chip-ico">${icon('i-cloud')}</span><span class="card-title">Sync</span>
+        <span class="meta"><span class="pill">${esc(s.text)}</span></span></div>
       <p class="sub">Both phones read and write <b>${esc(sync.family?.name || 'the shared log')}</b>.
         New entries appear on the other phone within a second or two, and anything logged with no
         signal uploads when you are back.</p>
@@ -30,7 +30,7 @@ export function syncCard() {
         : sync.lastSync ? `Up to date · last synced ${esc(ago(sync.lastSync))}` : 'Up to date'}</p>
       ${sync.error ? `<p class="banner">${esc(sync.error)}</p>` : ''}
       <div class="row">
-        <button class="btn primary" data-sync="push">Sync now</button>
+        <button class="btn tone" data-sync="push">${icon('i-cloud', 'sm')}Sync now</button>
         <button class="btn" data-sync="reupload">Re-upload this phone</button>
       </div>
     </section>`;
@@ -101,9 +101,9 @@ export function syncCard() {
     }
   }
 
-  return `<section class="card" id="sync-card">
-    <div class="card-head"><span class="card-title">Sync</span>
-      <span class="muted">${s.dot} ${esc(s.text)}</span></div>
+  return `<section class="card tone-sleep" id="sync-card">
+    <div class="card-head"><span class="chip-ico">${icon('i-cloud')}</span><span class="card-title">Sync</span>
+      <span class="meta">${s.dot} ${esc(s.text)}</span></div>
     ${body}
   </section>`;
 }

@@ -10,13 +10,14 @@ export const T = {
   PUMP:   'pump',
 };
 
+// icon = sprite symbol id in index.html; tone = colour class from styles.css
 export const TYPE_META = {
-  [T.FEED]:   { icon: '🤱', label: 'Breastfeed', short: 'Feed',   color: 'var(--series-2)' },
-  [T.SLEEP]:  { icon: '😴', label: 'Sleep',      short: 'Sleep',  color: 'var(--series-1)' },
-  [T.DIAPER]: { icon: '🧷', label: 'Diaper',     short: 'Diaper', color: 'var(--series-3)' },
-  [T.GROWTH]: { icon: '📏', label: 'Growth',     short: 'Growth', color: 'var(--text-secondary)' },
-  [T.BOTTLE]: { icon: '🍼', label: 'Bottle',     short: 'Bottle', color: 'var(--text-secondary)' },
-  [T.PUMP]:   { icon: '🫙', label: 'Pump',       short: 'Pump',   color: 'var(--text-secondary)' },
+  [T.FEED]:   { icon: 'i-feed',   tone: 'tone-feed',    label: 'Breastfeed', short: 'Feed' },
+  [T.SLEEP]:  { icon: 'i-sleep',  tone: 'tone-sleep',   label: 'Sleep',      short: 'Sleep' },
+  [T.DIAPER]: { icon: 'i-diaper', tone: 'tone-diaper',  label: 'Diaper',     short: 'Diaper' },
+  [T.GROWTH]: { icon: 'i-ruler',  tone: 'tone-growth',  label: 'Growth',     short: 'Growth' },
+  [T.BOTTLE]: { icon: 'i-bottle', tone: 'tone-neutral', label: 'Bottle',     short: 'Bottle' },
+  [T.PUMP]:   { icon: 'i-pump',   tone: 'tone-neutral', label: 'Pump',       short: 'Pump' },
 };
 
 // Types the app can create/edit. Bottle and pump are imported read-only so a

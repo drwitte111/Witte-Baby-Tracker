@@ -1,8 +1,9 @@
-// Home: live timers, "time since last", one-tap logging, today at a glance.
+// Home: today at a glance, then one card per activity in a fixed order.
+// A running feed or sleep changes its own card in place — nothing reorders.
 import { db } from '../db.js';
 import { T, makeEvent, feedSeconds, sleepSeconds, nextSide, feedLabel, diaperLabel, summarizeDay } from '../model.js';
-import { ago, clock, dur, time, startOfDay, DAY, weightLabel } from '../format.js';
-import { esc, toast, confirm } from '../ui.js';
+import { ago, clock, dur, time, startOfDay, weightLabel, lengthLabel } from '../format.js';
+import { esc, icon, toast, confirm } from '../ui.js';
 import { addEntry } from '../forms.js';
 
 /* ---- active-session helpers (persisted, so a refresh mid-feed loses nothing) ---- */
@@ -19,9 +20,15 @@ function liveSides(s, now = Date.now()) {
   return { left: a.leftSec || 0, right: a.rightSec || 0, total: (a.leftSec || 0) + (a.rightSec || 0) };
 }
 
+const head = (tone, ico, title, meta = '') => `
+  <div class="card-head">
+    <span class="chip-ico">${icon(ico)}</span>
+    <span class="card-title">${title}</span>
+    ${meta ? `<span class="meta">${meta}</span>` : ''}
+  </div>`;
+
 export async function render(root, ctx) {
   const now = Date.now();
-  const since = now - DAY * 1000 * 2;
   const [lastFeed, lastDiaper, lastSleep, lastGrowth, todayEvents] = await Promise.all([
     db.latest(T.FEED),
     db.latest(T.DIAPER),
@@ -32,103 +39,104 @@ export async function render(root, ctx) {
   const today = summarizeDay(todayEvents);
   const feed = ctx.state.activeFeed;
   const sleeping = ctx.state.activeSleep;
+  const u = ctx.state.units;
 
-  const cards = [];
+  /* ---- today ribbon ---- */
+  const sleepToday = today.sleepSec + (sleeping ? (now - sleeping.start) / 1000 : 0);
+  const ribbon = `<section class="ribbon" aria-label="Today so far">
+    <div class="tone-feed">${icon('i-feed', 'sm')}<b>${today.feeds}</b><span>feeds · ${dur(today.feedSec)}</span></div>
+    <div class="tone-sleep">${icon('i-sleep', 'sm')}<b>${dur(sleepToday)}</b><span>sleep today</span></div>
+    <div class="tone-diaper">${icon('i-diaper', 'sm')}<b>${today.diapers}</b><span>${today.wet + today.both} wet · ${today.dirty + today.both} dirty</span></div>
+  </section>`;
 
-  /* running nursing session */
+  /* ---- feed card: idle or nursing, same slot ---- */
+  let feedCard;
   if (feed) {
     const s = liveSides(feed);
-    cards.push(`<section class="card" id="feed-timer">
-      <div class="card-head"><span class="card-title">Nursing · ${feed.side === 'LEFT' ? 'left' : 'right'}</span>
-        <span class="pill">${feed.running ? 'running' : 'paused'}</span></div>
+    feedCard = `<section class="card active tone-feed" id="feed-card">
+      ${head('feed', 'i-feed', `<span class="pulse"></span>Nursing · ${feed.side === 'LEFT' ? 'left' : 'right'}`,
+             `<span class="pill">${feed.running ? 'running' : 'paused'}</span>`)}
       <div class="timer">
         <div class="big" data-live="total">${clock(s.total)}</div>
         <div class="side-tot">
-          <span class="${feed.side === 'LEFT' ? 'side-active' : ''}">L <span data-live="left">${clock(s.left)}</span></span>
-          <span class="${feed.side === 'RIGHT' ? 'side-active' : ''}">R <span data-live="right">${clock(s.right)}</span></span>
+          <span class="${feed.side === 'LEFT' ? 'side-active' : ''}">Left <span data-live="left">${clock(s.left)}</span></span>
+          <span class="${feed.side === 'RIGHT' ? 'side-active' : ''}">Right <span data-live="right">${clock(s.right)}</span></span>
         </div>
       </div>
       <div class="row">
-        <button class="btn" data-act="feed-switch">Switch to ${feed.side === 'LEFT' ? 'right' : 'left'}</button>
-        <button class="btn" data-act="feed-pause">${feed.running ? 'Pause' : 'Resume'}</button>
+        <button class="btn soft" data-act="feed-switch">${icon('i-switch')}Switch to ${feed.side === 'LEFT' ? 'right' : 'left'}</button>
+        <button class="btn soft" data-act="feed-pause">${icon(feed.running ? 'i-pause' : 'i-play')}${feed.running ? 'Pause' : 'Resume'}</button>
       </div>
       <div class="row">
-        <button class="btn primary" data-act="feed-save">Save feed</button>
+        <button class="btn tone" data-act="feed-save">${icon('i-check')}Save feed</button>
         <button class="btn ghost" data-act="feed-discard">Discard</button>
       </div>
-    </section>`);
+    </section>`;
+  } else {
+    const suggestion = nextSide(lastFeed);
+    const sideBtn = side => `<button class="btn ${suggestion === side ? 'tone' : 'soft'}" data-act="feed-start" data-side="${side}">
+      ${side === 'LEFT' ? 'Left' : 'Right'}${suggestion === side ? '<span class="badge">next</span>' : ''}</button>`;
+    feedCard = `<section class="card tone-feed" id="feed-card">
+      ${head('feed', 'i-feed', 'Feeding', lastFeed ? `last ${esc(time(lastFeed.start))}` : '')}
+      <div class="since" data-live="feed-since" data-start="${lastFeed ? lastFeed.start : ''}">${lastFeed ? ago(lastFeed.start, now) : 'No feeds yet'}</div>
+      ${lastFeed ? `<p class="sub">${esc(feedLabel(lastFeed))}</p>` : '<p class="sub">Tap a side to start the timer</p>'}
+      <div class="row">${sideBtn('LEFT')}${sideBtn('RIGHT')}</div>
+      <div class="row"><button class="btn ghost wide" data-act="feed-manual">${icon('i-plus', 'sm')}Log a past feed</button></div>
+    </section>`;
   }
 
-  /* running sleep */
+  /* ---- sleep card: awake or sleeping, same slot ---- */
+  let sleepCard;
   if (sleeping) {
-    cards.push(`<section class="card">
-      <div class="card-head"><span class="card-title">Asleep since ${time(sleeping.start)}</span></div>
+    sleepCard = `<section class="card active tone-sleep" id="sleep-card">
+      ${head('sleep', 'i-sleep', '<span class="pulse"></span>Sleeping', `since ${esc(time(sleeping.start))}`)}
       <div class="since live" data-live="sleep-elapsed">${dur((now - sleeping.start) / 1000)}</div>
+      <p class="sub">Tap when ${esc(ctx.state.profile?.name || 'baby')} wakes</p>
       <div class="row">
-        <button class="btn primary" data-act="sleep-wake">Woke up</button>
+        <button class="btn tone" data-act="sleep-wake">${icon('i-check')}Woke up</button>
         <button class="btn ghost" data-act="sleep-discard">Discard</button>
       </div>
-    </section>`);
-  }
-
-  /* feeds */
-  if (!feed) {
-    const suggestion = nextSide(lastFeed);
-    cards.push(`<section class="card">
-      <div class="card-head"><span class="card-title">Last feed</span>
-        ${lastFeed ? `<span class="muted">${esc(time(lastFeed.start))}</span>` : ''}</div>
-      <div class="since" data-live="feed-since" data-start="${lastFeed ? lastFeed.start : ''}">${lastFeed ? ago(lastFeed.start, now) : 'No feeds yet'}</div>
-      ${lastFeed ? `<p class="sub">${esc(feedLabel(lastFeed))}</p>` : ''}
-      <div class="row">
-        <button class="btn ${suggestion === 'LEFT' ? 'primary' : ''}" data-act="feed-start" data-side="LEFT">Left${suggestion === 'LEFT' ? ' ·  next' : ''}</button>
-        <button class="btn ${suggestion === 'RIGHT' ? 'primary' : ''}" data-act="feed-start" data-side="RIGHT">Right${suggestion === 'RIGHT' ? ' ·  next' : ''}</button>
-      </div>
-      <div class="row"><button class="btn ghost wide" data-act="feed-manual">Enter a past feed</button></div>
-    </section>`);
-  }
-
-  /* sleep */
-  if (!sleeping) {
+    </section>`;
+  } else {
     const finished = lastSleep;
-    cards.push(`<section class="card">
-      <div class="card-head"><span class="card-title">Awake for</span>
-        ${finished ? `<span class="muted">up since ${esc(time(finished.end))}</span>` : ''}</div>
+    sleepCard = `<section class="card tone-sleep" id="sleep-card">
+      ${head('sleep', 'i-sleep', 'Sleep', finished ? `up since ${esc(time(finished.end))}` : '')}
       <div class="since" data-live="wake-since" data-mode="elapsed" data-start="${finished ? finished.end : ''}">${finished ? dur((now - finished.end) / 1000) : 'No sleep logged'}</div>
-      ${finished ? `<p class="sub">Last sleep ${dur(sleepSeconds(finished))}</p>` : ''}
+      <p class="sub">${finished ? `awake · last sleep ${dur(sleepSeconds(finished))}` : 'Start the timer when baby goes down'}</p>
       <div class="row">
-        <button class="btn primary" data-act="sleep-start">Start sleep</button>
-        <button class="btn ghost" data-act="sleep-manual">Past sleep</button>
+        <button class="btn tone" data-act="sleep-start">${icon('i-sleep')}Start sleep</button>
+        <button class="btn ghost" data-act="sleep-manual">${icon('i-plus', 'sm')}Past sleep</button>
       </div>
-    </section>`);
+    </section>`;
   }
 
-  /* diapers */
-  cards.push(`<section class="card">
-    <div class="card-head"><span class="card-title">Last diaper</span>
-      ${lastDiaper ? `<span class="muted">${esc(time(lastDiaper.start))}</span>` : ''}</div>
+  /* ---- diaper card ---- */
+  const diaperCard = `<section class="card tone-diaper" id="diaper-card">
+    ${head('diaper', 'i-diaper', 'Diapers', lastDiaper ? `last ${esc(time(lastDiaper.start))}` : '')}
     <div class="since" data-live="diaper-since" data-start="${lastDiaper ? lastDiaper.start : ''}">${lastDiaper ? ago(lastDiaper.start, now) : 'None logged'}</div>
-    ${lastDiaper ? `<p class="sub">${esc(diaperLabel(lastDiaper))}${lastDiaper.blowout ? ' · blowout' : ''}</p>` : ''}
+    <p class="sub">${lastDiaper ? `${esc(diaperLabel(lastDiaper))}${lastDiaper.blowout ? ' · blowout' : ''}` : 'One tap logs it now'}</p>
     <div class="row">
-      <button class="btn" data-act="diaper" data-kind="wet">Wet</button>
-      <button class="btn" data-act="diaper" data-kind="dirty">Dirty</button>
-      <button class="btn" data-act="diaper" data-kind="both">Both</button>
+      <button class="btn soft" data-act="diaper" data-kind="wet">Wet</button>
+      <button class="btn soft" data-act="diaper" data-kind="dirty">Dirty</button>
+      <button class="btn soft" data-act="diaper" data-kind="both">Both</button>
     </div>
-    <div class="row"><button class="btn ghost wide" data-act="diaper-detail">Add with details</button></div>
-  </section>`);
+    <div class="row"><button class="btn ghost wide" data-act="diaper-detail">${icon('i-plus', 'sm')}With details</button></div>
+  </section>`;
 
-  /* today */
-  cards.push(`<section class="card">
-    <div class="card-head"><span class="card-title">Today</span>
-      <span class="muted">since midnight</span></div>
-    <div class="grid2">
-      <div class="stat"><b>${today.feeds}</b><span>feeds · ${dur(today.feedSec)}</span></div>
-      <div class="stat"><b>${dur(today.sleepSec)}</b><span>sleep logged</span></div>
-      <div class="stat"><b>${today.diapers}</b><span>diapers · ${today.wet + today.both}w / ${today.dirty + today.both}d</span></div>
-      <div class="stat"><b>${lastGrowth ? esc(weightLabel(lastGrowth.weightG, ctx.state.units.weight)) : '—'}</b><span>latest weight</span></div>
+  /* ---- growth card ---- */
+  const growthCard = `<section class="card tone-growth" id="growth-card">
+    ${head('growth', 'i-ruler', 'Growth', lastGrowth ? esc(new Date(lastGrowth.start).toLocaleDateString([], { month: 'short', day: 'numeric' })) : '')}
+    ${lastGrowth ? `<div class="grid2">
+      <div class="stat"><b>${esc(weightLabel(lastGrowth.weightG, u.weight))}</b><span>weight</span></div>
+      <div class="stat"><b>${esc(lengthLabel(lastGrowth.heightCm, u.length))}</b><span>length</span></div>
+    </div>` : '<p class="sub">No measurements yet</p>'}
+    <div class="row">
+      <button class="btn soft" data-act="growth-add">${icon('i-plus', 'sm')}Add measurement</button>
+      <button class="btn ghost" data-act="go-growth">${icon('i-growth', 'sm')}Curves</button>
     </div>
-  </section>`);
+  </section>`;
 
-  root.innerHTML = cards.join('');
+  root.innerHTML = ribbon + feedCard + sleepCard + diaperCard + growthCard;
   wire(root, ctx);
   ctx.onTick(() => tick(root, ctx));
 }
@@ -165,7 +173,8 @@ function wire(root, ctx) {
 
     switch (act) {
       case 'feed-start':
-        await ctx.setActiveFeed({ start: now, side: btn.dataset.side, leftSec: 0, rightSec: 0, running: true, sinceTick: now });
+        await ctx.setActiveFeed({ start: now, side: btn.dataset.side, beginSide: btn.dataset.side,
+                                  leftSec: 0, rightSec: 0, running: true, sinceTick: now });
         ctx.refresh();
         break;
 
@@ -242,6 +251,8 @@ function wire(root, ctx) {
       case 'diaper-detail': await addEntry(T.DIAPER, ctx); break;
       case 'feed-manual':  await addEntry(T.FEED, ctx); break;
       case 'sleep-manual': await addEntry(T.SLEEP, ctx, { start: Date.now() - 3600 * 1000, end: Date.now() }); break;
+      case 'growth-add':   await addEntry(T.GROWTH, ctx); break;
+      case 'go-growth':    ctx.go('growth'); break;
     }
   });
 }

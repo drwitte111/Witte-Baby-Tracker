@@ -6,6 +6,11 @@ export function h(html) {
   return t.content.firstElementChild;
 }
 
+/** Inline sprite icon: icon('i-feed') or icon('i-plus', 'sm'). */
+export function icon(id, cls = '') {
+  return `<svg class="ico ${cls}" aria-hidden="true"><use href="#${id}"/></svg>`;
+}
+
 export function esc(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
