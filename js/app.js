@@ -32,8 +32,8 @@ const ctx = {
   go(route) { location.hash = `#/${route}`; },
   onTick(fn) { tickHandlers.push(fn); },
 
-  async setActiveFeed(v) { state.activeFeed = v; await db.metaSet('activeFeed', v); syncWakeLock(); },
-  async setActiveSleep(v) { state.activeSleep = v; await db.metaSet('activeSleep', v); },
+  async setActiveFeed(v) { state.activeFeed = v; await db.metaSet('activeFeed', v); await markMetaDirty('activeFeed'); syncWakeLock(); },
+  async setActiveSleep(v) { state.activeSleep = v; await db.metaSet('activeSleep', v); await markMetaDirty('activeSleep'); },
   /** Update (or add) one baby's record. */
   async saveProfile(p) {
     const list = state.profiles.slice();
@@ -206,14 +206,19 @@ function initTheme() {
 
 // Profile and units can change on the other device too.
 async function reloadSharedState() {
-  const [profiles, current, units] = await Promise.all([
+  const [profiles, current, units, activeFeed, activeSleep] = await Promise.all([
     db.metaGet('profiles', state.profiles),
     db.metaGet('current', state.current),
     db.metaGet('units', state.units),
+    db.metaGet('activeFeed', state.activeFeed),
+    db.metaGet('activeSleep', state.activeSleep),
   ]);
   state.profiles = profiles || [];
   state.current = current;
   state.units = { ...DEFAULT_UNITS, ...units };
+  state.activeFeed = activeFeed;
+  state.activeSleep = activeSleep;
+  syncWakeLock();
   applyScope();
 }
 
