@@ -344,6 +344,15 @@ button:focus-visible, .chip:focus-visible, .entry:focus-visible { outline: 2px s
 .toggle input:checked { background: var(--good); }
 .toggle input:checked::after { transform: translateX(18px); }
 
+/* baby selector */
+.baby-list { display: flex; flex-direction: column; gap: 8px; }
+.baby { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; cursor: pointer;
+  background: var(--surface-2); border: 1.5px solid transparent; border-radius: 15px; padding: 10px 12px; }
+.baby.on { border-color: var(--tone); background: color-mix(in srgb, var(--tone) 9%, var(--surface-1)); }
+.baby-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.baby-main b { font-size: 15.5px; }
+.avatar.sm { width: 34px; height: 34px; font-size: 15px; }
+
 /* settings groups */
 .group { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-card); box-shadow: var(--shadow-1); margin-bottom: 12px; overflow: hidden; }
 .group-title { padding: 14px 16px 6px; font-size: 12.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }

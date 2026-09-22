@@ -34,12 +34,23 @@ function done(request) {
   });
 }
 
+// Every read is scoped to one baby. Rows carry `profileId` (or Nara's
+// `profileKey`); rows with neither belong to the primary baby.
+let scopeId = null, primaryId = null;
+const ownerOf = ev => ev.profileId || ev.profileKey || primaryId;
+const inScope = ev => !ev.deleted && (!scopeId || ownerOf(ev) === scopeId);
+
 // Views and the sync engine both listen for local changes.
 const listeners = new Set();
 function emit(reason) { listeners.forEach(fn => { try { fn(reason); } catch {} }); }
 
 export const db = {
   onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
+
+  /** Which baby reads return, and which baby untagged rows belong to. */
+  setScope(current, primary) { scopeId = current || null; primaryId = primary || current || null; },
+  scope() { return scopeId; },
+  ownerOf,
 
   // Let the sync engine announce changes it made outside of put/remove.
   notify(reason = 'remote') { emit(reason); },
@@ -52,6 +63,7 @@ export const db = {
     const row = remote
       ? { ...ev, dirty: false }
       : { ...ev, updated: Date.now(), dirty: true };
+    if (!remote && !row.profileId && !row.profileKey && scopeId) row.profileId = scopeId;
     const s = await tx('events', 'readwrite');
     await done(s.put(row));
     emit(remote ? 'remote' : 'local');
@@ -67,9 +79,13 @@ export const db = {
       await new Promise((resolve, reject) => {
         const t = database.transaction('events', 'readwrite');
         const s = t.objectStore('events');
-        slice.forEach(ev => s.put(remote
-          ? { ...ev, dirty: false }
-          : { ...ev, updated: ev.updated || Date.now(), dirty: true }));
+        slice.forEach(ev => {
+          const row = remote
+            ? { ...ev, dirty: false }
+            : { ...ev, updated: ev.updated || Date.now(), dirty: true };
+          if (!remote && !row.profileId && !row.profileKey && scopeId) row.profileId = scopeId;
+          s.put(row);
+        });
         t.oncomplete = resolve;
         t.onerror = () => reject(t.error);
       });
@@ -116,14 +132,14 @@ export const db = {
   async all() {
     const s = await tx('events', 'readonly');
     const out = await done(s.index('by_start').getAll());
-    return out.reverse().filter(e => !e.deleted);
+    return out.reverse().filter(inScope);
   },
 
   // Live events with start in [from, to), newest first.
   async range(from, to) {
     const s = await tx('events', 'readonly');
     const out = await done(s.index('by_start').getAll(IDBKeyRange.bound(from, to, false, true)));
-    return out.reverse().filter(e => !e.deleted);
+    return out.reverse().filter(inScope);
   },
 
   // Most recent event of a type (optionally matching a filter), newest first scan.
@@ -135,7 +151,7 @@ export const db = {
       req.onsuccess = () => {
         const c = req.result;
         if (!c) return resolve(null);
-        if (!c.value.deleted && (!match || match(c.value))) return resolve(c.value);
+        if (inScope(c.value) && (!match || match(c.value))) return resolve(c.value);
         c.continue();
       };
       req.onerror = () => reject(req.error);
@@ -146,7 +162,15 @@ export const db = {
     const s = await tx('events', 'readonly');
     const lo = from ?? -Infinity, hi = to ?? Infinity;
     const out = await done(s.index('by_type_start').getAll(IDBKeyRange.bound([type, lo], [type, hi])));
-    return out.reverse().filter(e => !e.deleted);
+    return out.reverse().filter(inScope);
+  },
+
+  /** Live-row count per baby id, ignoring the current scope. */
+  async countByOwner() {
+    const rows = await this.allRaw();
+    const out = {};
+    for (const r of rows) if (!r.deleted) out[ownerOf(r)] = (out[ownerOf(r)] || 0) + 1;
+    return out;
   },
 
   /* ---- sync support ---- */

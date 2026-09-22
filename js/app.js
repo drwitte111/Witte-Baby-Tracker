@@ -14,7 +14,9 @@ const ROUTES = { home, log, stats, growth, settings };
 const DEFAULT_UNITS = { weight: 'lb', length: 'in', volume: 'oz' };
 
 const state = {
-  profile: null,
+  profiles: [],          // every baby this family tracks
+  current: null,         // id of the one every screen shows
+  profile: null,         // the current baby's record (derived)
   units: { ...DEFAULT_UNITS },
   caregiver: '',
   activeFeed: null,
@@ -32,7 +34,29 @@ const ctx = {
 
   async setActiveFeed(v) { state.activeFeed = v; await db.metaSet('activeFeed', v); syncWakeLock(); },
   async setActiveSleep(v) { state.activeSleep = v; await db.metaSet('activeSleep', v); },
-  async setProfile(v) { state.profile = v; await db.metaSet('profile', v); await markMetaDirty('profile'); paintHeader(); },
+  /** Update (or add) one baby's record. */
+  async saveProfile(p) {
+    const list = state.profiles.slice();
+    const i = list.findIndex(x => x.id === p.id);
+    if (i >= 0) list[i] = { ...list[i], ...p }; else list.push(p);
+    await setProfiles(list);
+    if (!state.current) await ctx.selectProfile(p.id);
+    else applyScope();
+  },
+  /** Switch every screen (on every phone) to this baby. */
+  async selectProfile(id) {
+    if (!state.profiles.some(p => p.id === id)) return;
+    state.current = id;
+    await db.metaSet('current', id);
+    await markMetaDirty('current');
+    applyScope();
+    ctx.refresh();
+  },
+  async addProfile(p) {
+    const rec = { id: p.id || newProfileId(), name: p.name || 'Baby', birth: p.birth || null, sex: p.sex || '' };
+    await ctx.saveProfile(rec);
+    return rec;
+  },
   async setUnits(v) { state.units = v; await db.metaSet('units', v); await markMetaDirty('units'); ctx.refresh(); },
   async setCaregiver(v) { state.caregiver = v; await db.metaSet('caregiver', v); },
 };
@@ -55,6 +79,35 @@ async function syncWakeLock() {
 function currentRoute() {
   const r = (location.hash || '').replace(/^#\/?/, '').split('?')[0];
   return ROUTES[r] ? r : 'home';
+}
+
+function newProfileId() {
+  return 'p-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+async function setProfiles(list) {
+  state.profiles = list;
+  await db.metaSet('profiles', list);
+  await markMetaDirty('profiles');
+}
+
+// Point the data layer at the current baby and refresh the derived record.
+function applyScope() {
+  const primary = state.profiles[0]?.id || null;
+  if (!state.current || !state.profiles.some(p => p.id === state.current)) state.current = primary;
+  state.profile = state.profiles.find(p => p.id === state.current) || null;
+  db.setScope(state.current, primary);
+  paintHeader();
+}
+
+// One-time move from the single `profile` record to the roster.
+async function migrateProfiles(profiles, legacy) {
+  if (profiles && profiles.length) return profiles;
+  if (!legacy) return [];
+  const rec = { id: legacy.profileKey || newProfileId(), name: legacy.name || 'Baby', birth: legacy.birth || null, sex: legacy.sex || '' };
+  await db.metaSet('profiles', [rec]);
+  await markMetaDirty('profiles');
+  return [rec];
 }
 
 function paintHeader() {
@@ -153,13 +206,15 @@ function initTheme() {
 
 // Profile and units can change on the other device too.
 async function reloadSharedState() {
-  const [profile, units] = await Promise.all([
-    db.metaGet('profile', state.profile),
+  const [profiles, current, units] = await Promise.all([
+    db.metaGet('profiles', state.profiles),
+    db.metaGet('current', state.current),
     db.metaGet('units', state.units),
   ]);
-  state.profile = profile;
+  state.profiles = profiles || [];
+  state.current = current;
   state.units = { ...DEFAULT_UNITS, ...units };
-  paintHeader();
+  applyScope();
 }
 
 async function boot() {
@@ -167,20 +222,23 @@ async function boot() {
   initTooltips();
   initKeyboardAware();
 
-  const [profile, units, caregiver, activeFeed, activeSleep] = await Promise.all([
+  const [profiles, current, legacyProfile, units, caregiver, activeFeed, activeSleep] = await Promise.all([
+    db.metaGet('profiles', []),
+    db.metaGet('current', null),
     db.metaGet('profile', null),
     db.metaGet('units', DEFAULT_UNITS),
     db.metaGet('caregiver', ''),
     db.metaGet('activeFeed', null),
     db.metaGet('activeSleep', null),
   ]);
-  state.profile = profile;
+  state.profiles = await migrateProfiles(profiles, legacyProfile);
+  state.current = current;
   state.units = { ...DEFAULT_UNITS, ...units };
   state.caregiver = caregiver;
   state.activeFeed = activeFeed;
   state.activeSleep = activeSleep;
 
-  paintHeader();
+  applyScope();
 
   document.querySelectorAll('.tab').forEach(tab =>
     tab.addEventListener('click', () => ctx.go(tab.dataset.route)));

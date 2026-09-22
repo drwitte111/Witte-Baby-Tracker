@@ -2,26 +2,39 @@
 import { db } from '../db.js';
 import { fromNaraCsv, toNaraCsv } from '../csv.js';
 import { T } from '../model.js';
-import { esc, icon, toast, confirm, shareOrDownload } from '../ui.js';
+import { esc, icon, toast, confirm, sheet, shareOrDownload } from '../ui.js';
 import { toDateInput, ageFrom } from '../format.js';
 import { syncCard, wireSync } from './sync-ui.js';
 import { sync, pushNow } from '../sync.js';
 
 export async function render(root, ctx) {
   const count = await db.count();
+  const counts = await db.countByOwner();
   const lastImport = await db.metaGet('lastImport', null);
   const p = ctx.state.profile || {};
   const u = ctx.state.units;
 
   root.innerHTML = `
   <section class="card tone-growth">
-    <div class="card-head"><span class="chip-ico">${icon('i-ruler')}</span><span class="card-title">Baby</span>
-      <span class="meta">${esc(ageFrom(p.birth))}</span></div>
+    <div class="card-head"><span class="chip-ico">${icon('i-ruler')}</span><span class="card-title">Babies</span>
+      <span class="meta">${ctx.state.profiles.length === 1 ? 'tracking' : `${ctx.state.profiles.length} on this family`}</span></div>
+    <div class="baby-list">
+      ${ctx.state.profiles.map(b => `<button class="baby ${b.id === ctx.state.current ? 'on' : ''}" data-act="select-baby" data-id="${esc(b.id)}">
+        <span class="avatar sm">${esc((b.name || '•').trim()[0].toUpperCase())}</span>
+        <span class="baby-main"><b>${esc(b.name || 'Baby')}</b>
+          <span class="muted">${esc(ageFrom(b.birth) || 'birth date not set')} · ${counts[b.id] || 0} entries</span></span>
+        ${b.id === ctx.state.current ? `<span class="pill">showing</span>` : ''}
+      </button>`).join('') || '<p class="sub">No baby yet — add one below or import a Nara export.</p>'}
+    </div>
+    ${p.id ? `<p class="sub" style="margin-top:12px"><b>${esc(p.name || 'Baby')}</b> · edit</p>
     <label class="field"><span>Name</span><input name="name" value="${esc(p.name || '')}" placeholder="Baby"></label>
-    <label class="field"><span>Birth date</span><input type="date" name="birth" value="${p.birth ? toDateInput(p.birth) : ''}"></label>
-    <label class="field"><span>Your name <span class="muted">(saved on entries you add)</span></span>
+    <label class="field"><span>Birth date</span><input type="date" name="birth" value="${p.birth ? toDateInput(p.birth) : ''}"></label>` : ''}
+    <label class="field"><span>Your name <span class="muted">(saved on entries you add, this phone only)</span></span>
       <input name="caregiver" value="${esc(ctx.state.caregiver || '')}" placeholder="e.g. Alaina"></label>
-    <div class="row"><button class="btn tone wide" data-act="save-profile">${icon('i-check', 'sm')}Save</button></div>
+    <div class="row">
+      <button class="btn tone" data-act="save-profile">${icon('i-check', 'sm')}Save</button>
+      <button class="btn soft" data-act="add-baby">${icon('i-plus', 'sm')}Add a baby</button>
+    </div>
   </section>
 
   <section class="card tone-neutral">
@@ -100,8 +113,14 @@ export async function render(root, ctx) {
       await db.putMany(events, done => { bar.value = done; });
 
       if (profile) {
-        const merged = { ...ctx.state.profile, ...profile };
-        await ctx.setProfile(merged);
+        // Nara's profile key is the id, so re-imports update the same baby.
+        const id = profile.profileKey || ctx.state.current || undefined;
+        const existing = ctx.state.profiles.find(b => b.id === id);
+        const rec = await ctx.addProfile({ id, name: profile.name || existing?.name || 'Baby',
+                                           birth: profile.birth || existing?.birth || null, sex: profile.sex || existing?.sex || '' });
+        if (!existing) await ctx.selectProfile(rec.id);
+      } else if (!ctx.state.current) {
+        await ctx.addProfile({ name: 'Baby' });
       }
       const byType = events.reduce((a, ev) => (a[ev.type] = (a[ev.type] || 0) + 1, a), {});
       const summary = `Imported ${events.length} entries from ${file.name} · ${
@@ -135,21 +154,47 @@ export async function render(root, ctx) {
     if (!act) return;
 
     if (act === 'save-profile') {
-      const birthStr = root.querySelector('[name=birth]').value;
-      await ctx.setProfile({
-        ...ctx.state.profile,
-        name: root.querySelector('[name=name]').value.trim(),
-        birth: birthStr ? new Date(`${birthStr}T00:00:00`).getTime() : null,
-      });
+      if (ctx.state.profile) {
+        const birthStr = root.querySelector('[name=birth]').value;
+        await ctx.saveProfile({
+          ...ctx.state.profile,
+          name: root.querySelector('[name=name]').value.trim() || 'Baby',
+          birth: birthStr ? new Date(`${birthStr}T00:00:00`).getTime() : null,
+        });
+      }
       await ctx.setCaregiver(root.querySelector('[name=caregiver]').value.trim());
       toast('Saved');
       ctx.refresh();
     }
 
+    if (act === 'select-baby') {
+      const id = e.target.closest('[data-id]').dataset.id;
+      if (id !== ctx.state.current) { await ctx.selectProfile(id); toast(`Showing ${ctx.state.profile?.name || 'baby'} on every phone`); }
+    }
+
+    if (act === 'add-baby') {
+      const rec = await sheet({
+        title: 'Add a baby',
+        body: `<label class="field"><span>Name</span><input name="nm" placeholder="Name" autocomplete="off"></label>
+               <label class="field"><span>Birth date</span><input type="date" name="bd"></label>`,
+        actions: [{ label: 'Add', cls: 'primary', onClick: r => {
+          const nm = r.querySelector('[name=nm]').value.trim();
+          if (!nm) { toast('Give the baby a name'); return false; }
+          const bd = r.querySelector('[name=bd]').value;
+          return { name: nm, birth: bd ? new Date(`${bd}T00:00:00`).getTime() : null };
+        } }],
+      });
+      if (rec) {
+        const added = await ctx.addProfile(rec);
+        await ctx.selectProfile(added.id);
+        toast(`${added.name} added`);
+      }
+    }
+
     if (act === 'export') {
       const all = await db.all();
       if (!all.length) return toast('Nothing to export');
-      const csv = toNaraCsv(all, ctx.state.profile, ctx.state.units);
+      const csv = toNaraCsv(all, ctx.state.profile ? { ...ctx.state.profile, profileKey: ctx.state.profile.id } : null, ctx.state.units);
       const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
       const who = (ctx.state.profile?.name || 'baby').toLowerCase().replace(/\W+/g, '');
       const how = await shareOrDownload(`export_wittebaby_${who}_${stamp}.csv`, csv);
