@@ -7,14 +7,8 @@ import { toDateInput, ageFrom } from '../format.js';
 import { syncCard, wireSync } from './sync-ui.js';
 import { sync, pushNow } from '../sync.js';
 
-export async function render(root, ctx) {
-  const count = await db.count();
-  const counts = await db.countByOwner();
-  const lastImport = await db.metaGet('lastImport', null);
-  const p = ctx.state.profile || {};
-  const u = ctx.state.units;
-
-  root.innerHTML = `
+function babiesCard(ctx, v) {
+  return `
   <section class="card tone-growth">
     <div class="card-head"><span class="chip-ico">${icon('i-ruler')}</span><span class="card-title">Babies</span>
       <span class="meta">${ctx.state.profiles.length === 1 ? 'tracking' : `${ctx.state.profiles.length} on this family`}</span></div>
@@ -22,42 +16,48 @@ export async function render(root, ctx) {
       ${ctx.state.profiles.map(b => `<button class="baby ${b.id === ctx.state.current ? 'on' : ''}" data-act="select-baby" data-id="${esc(b.id)}">
         <span class="avatar sm">${esc((b.name || '•').trim()[0].toUpperCase())}</span>
         <span class="baby-main"><b>${esc(b.name || 'Baby')}</b>
-          <span class="muted">${esc(ageFrom(b.birth) || 'birth date not set')} · ${counts[b.id] || 0} entries</span></span>
+          <span class="muted">${esc(ageFrom(b.birth) || 'birth date not set')} · ${v.counts[b.id] || 0} entries</span></span>
         ${b.id === ctx.state.current ? `<span class="pill">showing</span>` : ''}
       </button>`).join('') || '<p class="sub">No baby yet — add one below or import a Nara export.</p>'}
     </div>
-    ${p.id ? `<p class="sub" style="margin-top:12px"><b>${esc(p.name || 'Baby')}</b> · edit</p>
-    <label class="field"><span>Name</span><input name="name" value="${esc(p.name || '')}" placeholder="Baby"></label>
-    <label class="field"><span>Birth date</span><input type="date" name="birth" value="${p.birth ? toDateInput(p.birth) : ''}"></label>` : ''}
+    ${v.p.id ? `<p class="sub" style="margin-top:12px"><b>${esc(v.p.name || 'Baby')}</b> · edit</p>
+    <label class="field"><span>Name</span><input name="name" value="${esc(v.p.name || '')}" placeholder="Baby"></label>
+    <label class="field"><span>Birth date</span><input type="date" name="birth" value="${v.p.birth ? toDateInput(v.p.birth) : ''}"></label>` : ''}
     <label class="field"><span>Your name <span class="muted">(saved on entries you add, this phone only)</span></span>
       <input name="caregiver" value="${esc(ctx.state.caregiver || '')}" placeholder="e.g. Alaina"></label>
     <div class="row">
       <button class="btn tone" data-act="save-profile">${icon('i-check', 'sm')}Save</button>
       <button class="btn soft" data-act="add-baby">${icon('i-plus', 'sm')}Add a baby</button>
     </div>
-  </section>
+  </section>`;
+}
 
+function unitsCard(ctx, v) {
+  return `
   <section class="card tone-neutral">
     <div class="card-head"><span class="chip-ico">${icon('i-more')}</span><span class="card-title">Units</span></div>
     <div class="field-row">
       <label class="field"><span>Weight</span><select name="uw">
-        <option value="lb"${u.weight === 'lb' ? ' selected' : ''}>lb / oz</option>
-        <option value="kg"${u.weight === 'kg' ? ' selected' : ''}>kg</option>
+        <option value="lb"${v.u.weight === 'lb' ? ' selected' : ''}>lb / oz</option>
+        <option value="kg"${v.u.weight === 'kg' ? ' selected' : ''}>kg</option>
       </select></label>
       <label class="field"><span>Length</span><select name="ul">
-        <option value="in"${u.length === 'in' ? ' selected' : ''}>inches</option>
-        <option value="cm"${u.length === 'cm' ? ' selected' : ''}>cm</option>
+        <option value="in"${v.u.length === 'in' ? ' selected' : ''}>inches</option>
+        <option value="cm"${v.u.length === 'cm' ? ' selected' : ''}>cm</option>
       </select></label>
       <label class="field"><span>Volume</span><select name="uv">
-        <option value="oz"${u.volume === 'oz' ? ' selected' : ''}>fl oz</option>
-        <option value="ml"${u.volume === 'ml' ? ' selected' : ''}>ml</option>
+        <option value="oz"${v.u.volume === 'oz' ? ' selected' : ''}>fl oz</option>
+        <option value="ml"${v.u.volume === 'ml' ? ' selected' : ''}>ml</option>
       </select></label>
     </div>
-  </section>
+  </section>`;
+}
 
+function dataCard(ctx, v) {
+  return `
   <section class="card tone-accent">
     <div class="card-head"><span class="chip-ico">${icon('i-share')}</span><span class="card-title">Data</span>
-      <span class="meta">${count} entries</span></div>
+      <span class="meta">${v.count} entries</span></div>
     <p class="sub">Import your Nara Baby export to bring history across; export writes the same format back. Without sync turned on, data stays on this device only.</p>
     <div class="row">
       <label class="btn">${icon('i-plus', 'sm')}Import CSV
@@ -65,12 +65,13 @@ export async function render(root, ctx) {
       </label>
       <button class="btn" data-act="export">${icon('i-share', 'sm')}Export</button>
     </div>
-    <div id="import-status">${lastImport ? `<p class="banner">${esc(lastImport.summary)}</p>` : ''}</div>
+    <div id="import-status">${v.lastImport ? `<p class="banner">${esc(v.lastImport.summary)}</p>` : ''}</div>
     <div class="row"><button class="btn danger wide" data-act="wipe">Delete all data</button></div>
-  </section>
+  </section>`;
+}
 
-  ${syncCard()}
-
+function widgetCard(ctx, v) {
+  return `
   <section class="card tone-sleep">
     <div class="card-head"><span class="chip-ico">${icon('i-clock')}</span><span class="card-title">Lock Screen widget</span>
       <span class="meta">free · Scriptable</span></div>
@@ -83,13 +84,29 @@ export async function render(root, ctx) {
       <li><b>Home Screen:</b> long-press → + → Scriptable → pick a size → Edit Widget → Script: Witte Baby.</li>
     </ol>
     <div class="row"><button class="btn tone wide" data-act="copy-widget">${icon('i-share', 'sm')}Copy widget script</button></div>
-  </section>
+  </section>`;
+}
 
+function appCard(ctx, v) {
+  return `
   <section class="card tone-neutral">
     <div class="card-head"><span class="chip-ico">${icon('i-home')}</span><span class="card-title">App</span></div>
     <p class="sub">Add to your home screen for a full-screen, offline-capable app: in Safari tap Share → Add to Home Screen; in Chrome use the install prompt in the address bar.</p>
     <p class="sub" style="margin-top:8px" id="storage-line"></p>
   </section>`;
+}
+
+export async function render(root, ctx) {
+  const view = {
+    count: await db.count(),
+    counts: await db.countByOwner(),
+    lastImport: await db.metaGet('lastImport', null),
+    p: ctx.state.profile || {},
+    u: ctx.state.units,
+  };
+
+  root.innerHTML = [babiesCard, unitsCard, dataCard, () => syncCard(), widgetCard, appCard]
+    .map(f => f(ctx, view)).join('');
 
   wireSync(root, ctx);
 

@@ -97,8 +97,19 @@ invite-code paths in `js/sync.js` come back to life.
 - **Deletes travel as tombstones**, so a delete on one phone doesn't sync back from the other.
 - **Shared settings.** Baby name, birth date and units sync; the caregiver name stays per
   device, so entries record who logged them.
-- **Cost.** The free Spark tier allows 50k reads and 20k writes a day. A first upload of ~3,800
-  entries is about 3,800 writes; ordinary daily use is a few dozen operations.
+- **Cost.** The free Spark tier allows 50,000 reads and 20,000 writes a day. A day of logging
+  is ~25 of each per phone; the widget adds ~100 reads. A first upload of ~3,800 entries is a
+  one-time 3,800 writes.
+
+### Staying inside the free tier — guaranteed
+
+Each phone counts its own reads and writes per day (More → Sync shows the numbers against the
+limits) and **stops itself at 9,000 writes / 22,000 reads** — under half the daily quota, so
+two phones together cannot exceed it. Throttled uploads stay on the phone and resume after
+midnight; throttled downloads reconnect after midnight. Nothing is lost either way. The app
+also never queries Firestore for screens (every screen reads local data), never re-downloads
+history (a watermark fetches only what changed), and writes the family document once per
+phone rather than per open.
 
 ## Data and privacy
 

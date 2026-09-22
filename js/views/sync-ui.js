@@ -1,8 +1,11 @@
 // The Sync card on the More screen: project config, account, family, invites.
-import { sync, onSyncChange, setConfig, clearConfig, parseConfig, isBaked, needsSignIn,
-         signUp, signIn, signOutNow, createFamily, joinFamily, uploadEverything,
-         createInvite, revokeInvites, pushNow, init as initSync } from '../sync.js';
+import { sync, onSyncChange, setConfig, clearConfig, parseConfig, isBaked, needsSignIn, budget, QUOTA,
+         uploadEverything, pushNow, init as initSync } from '../sync.js';
+
+// Account, family and invite actions only exist with REQUIRE_SIGN_IN; fetch them when needed.
+const accounts = () => import('../sync-accounts.js');
 import { esc, icon, toast, confirm, sheet } from '../ui.js';
+import { db } from '../db.js';
 import { ago } from '../format.js';
 
 const STATUS = {
@@ -28,6 +31,9 @@ export function syncCard() {
         signal uploads when you are back.</p>
       <p class="sub">${sync.pending ? `${sync.pending} change${sync.pending === 1 ? '' : 's'} waiting to upload`
         : sync.lastSync ? `Up to date · last synced ${esc(ago(sync.lastSync))}` : 'Up to date'}</p>
+      ${usageLine()}
+      ${sync.throttled ? `<p class="banner">This phone hit its daily ${sync.throttled === 'writes' ? 'upload' : 'download'} allowance
+        (kept well under Firebase's free tier). ${sync.throttled === 'writes' ? 'Entries are saved here and upload' : 'Syncing resumes'} after midnight — nothing is lost.</p>` : ''}
       ${sync.error ? `<p class="banner">${esc(sync.error)}</p>` : ''}
       <div class="row">
         <button class="btn tone" data-sync="push">${icon('i-cloud', 'sm')}Sync now</button>
@@ -108,6 +114,14 @@ export function syncCard() {
   </section>`;
 }
 
+function usageLine() {
+  const b = budget();
+  const pct = Math.max(b.reads / QUOTA.reads, b.writes / QUOTA.writes) * 100;
+  return `<p class="sub usage"><span class="muted">Firebase today · this phone:</span>
+    ${b.reads.toLocaleString()} reads · ${b.writes.toLocaleString()} writes
+    <span class="muted">(free tier ${QUOTA.reads.toLocaleString()} / ${QUOTA.writes.toLocaleString()} a day · ${pct < 1 ? 'under 1' : pct.toFixed(0)}% used)</span></p>`;
+}
+
 /** Re-render just the sync card in place, so typing elsewhere is not disturbed. */
 function repaint(ctx) {
   const card = document.getElementById('sync-card');
@@ -151,10 +165,10 @@ export function wireSync(root, ctx) {
           if (!email || !password) return toast('Email and password are required');
           busy(true);
           if (act === 'sign-up') {
-            await signUp(email, password, name);
+            await (await accounts()).signUp(email, password, name);
             toast('Account created');
           } else {
-            await signIn(email, password);
+            await (await accounts()).signIn(email, password);
             toast('Signed in');
           }
           if (name) await ctx.setCaregiver(name);
@@ -163,13 +177,13 @@ export function wireSync(root, ctx) {
 
         case 'sign-out':
           if (!await confirm('Sign out? Data already on this device stays.', { okLabel: 'Sign out' })) return;
-          await signOutNow();
+          await (await accounts()).signOutNow();
           break;
 
         case 'create-family': {
           busy(true);
           const name = ctx.state.profile?.name ? `${ctx.state.profile.name}'s family` : 'Our family';
-          await createFamily(name);
+          await (await accounts()).createFamily(name);
           toast('Family created — uploading your history');
           break;
         }
@@ -178,13 +192,13 @@ export function wireSync(root, ctx) {
           const code = field('code').value.trim();
           if (!code) return toast('Enter the invite code');
           busy(true);
-          await joinFamily(code);
+          await (await accounts()).joinFamily(code);
           toast('Joined — syncing');
           break;
         }
 
         case 'invite': {
-          const { code, expires } = await createInvite();
+          const { code, expires } = await (await accounts()).createInvite();
           await sheet({
             title: 'Invite the other caregiver',
             body: `<p class="sub">On their phone: open this app, connect the same Firebase project,
@@ -193,7 +207,7 @@ export function wireSync(root, ctx) {
               <p class="sub">Valid until ${esc(new Date(expires).toLocaleString())}.</p>`,
             actions: [
               { label: 'Copy code', cls: 'primary', onClick: () => { navigator.clipboard?.writeText(code); toast('Copied'); return false; } },
-              { label: 'Close invites now', cls: 'ghost', onClick: async (_b, close) => { await revokeInvites(); toast('Invites closed'); close(null); return false; } },
+              { label: 'Close invites now', cls: 'ghost', onClick: async (_b, close) => { await (await accounts()).revokeInvites(); toast('Invites closed'); close(null); return false; } },
             ],
           });
           break;
@@ -204,14 +218,16 @@ export function wireSync(root, ctx) {
           toast('Synced');
           break;
 
-        case 'reupload':
-          if (!await confirm('Send every entry on this phone to the shared log again?',
+        case 'reupload': {
+          const n = await db.count();
+          if (!await confirm(`Send all ${n.toLocaleString()} entries on this phone again? That is ${n.toLocaleString()} writes of the ${QUOTA.writes.toLocaleString()} a day Firebase allows for free; anything over this phone's share waits for midnight.`,
                              { danger: false, okLabel: 'Upload' })) return;
           busy(true);
           await uploadEverything();
           await pushNow();
           toast('Uploaded');
           break;
+        }
       }
     } catch (err) {
       console.error(err);

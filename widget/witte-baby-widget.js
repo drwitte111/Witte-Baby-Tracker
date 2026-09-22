@@ -2,7 +2,7 @@
 //
 // Reads one small document the app keeps in your Firestore and shows the
 // current baby's sleep / feed state. Timers tick live; the data itself
-// refreshes on iOS's widget schedule (roughly every 5–15 minutes).
+// refreshes on iOS's widget schedule (roughly every 15 minutes).
 //
 // Setup (once per phone):
 //   1. Install "Scriptable" from the App Store.
@@ -192,7 +192,7 @@ try {
 } catch (e) {
   widget = errorWidget(String(e.message || e));
 }
-widget.refreshAfterDate = new Date(Date.now() + 5 * MIN);   // ask iOS to come back soon
+widget.refreshAfterDate = new Date(Date.now() + 15 * MIN);  // timers tick on their own; data every ~15 min keeps reads tiny
 if (config.runsInWidget) Script.setWidget(widget);
 else await widget.presentMedium();
 Script.complete();

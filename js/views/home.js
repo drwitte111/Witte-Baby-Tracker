@@ -4,45 +4,8 @@ import { db } from '../db.js';
 import { T, makeEvent, feedSeconds, sleepSeconds, nextSide, feedLabel, diaperLabel, summarizeDay, sleepSecondsPerDay } from '../model.js';
 import { ago, clock, dur, time, startOfDay, weightLabel, lengthLabel, DAY } from '../format.js';
 import { esc, icon, toast, confirm } from '../ui.js';
+import { accrueFeed as accrue, feedTotals as liveSides, normSleep, sleepElapsed, bankSleep, shiftStart, hhmm, todayAt } from '../sessions.js';
 import { addEntry } from '../forms.js';
-
-/* ---- active-session helpers (persisted, so a refresh mid-feed loses nothing) ---- */
-
-function accrue(s, now = Date.now()) {
-  if (!s.running) return s;
-  const add = Math.max(0, (now - s.sinceTick) / 1000);
-  const key = s.side === 'LEFT' ? 'leftSec' : 'rightSec';
-  return { ...s, [key]: (s[key] || 0) + add, sinceTick: now };
-}
-
-function liveSides(s, now = Date.now()) {
-  const a = accrue(s, now);
-  return { left: a.leftSec || 0, right: a.rightSec || 0, total: (a.leftSec || 0) + (a.rightSec || 0) };
-}
-
-// Sleep session: `start` is when baby fell asleep (adjustable), `elapsedSec` is
-// asleep-time banked before the current run, `sinceTick` is when the current run began.
-function normSleep(s) {
-  if (!s) return null;
-  return { start: s.start, elapsedSec: s.elapsedSec || 0, running: s.running !== false,
-           sinceTick: s.sinceTick || s.start };
-}
-function sleepElapsed(s, now = Date.now()) {
-  const n = normSleep(s);
-  return n.elapsedSec + (n.running ? Math.max(0, (now - n.sinceTick) / 1000) : 0);
-}
-function bankSleep(s, now = Date.now()) {
-  const n = normSleep(s);
-  return n.running ? { ...n, elapsedSec: n.elapsedSec + Math.max(0, (now - n.sinceTick) / 1000), sinceTick: now } : n;
-}
-
-// "It actually started at T": move the start and credit the difference as time asleep / nursed.
-function shiftStart(session, newStart, creditKey) {
-  const delta = (session.start - newStart) / 1000;            // +ve when moved earlier
-  const out = { ...session, start: newStart };
-  out[creditKey] = Math.max(0, (session[creditKey] || 0) + delta);
-  return out;
-}
 
 // "Set time" is a real <input type="time"> laid invisibly over the chip, so the
 // tap goes straight to the phone's time wheel — no sheet, no date field.
@@ -55,17 +18,6 @@ const earlierRow = (act, label, startMs) => `<div class="row adjust">
     <input type="time" step="60" value="${hhmm(startMs)}" data-set="${act}" aria-label="${label} Set the exact time">
   </label>
 </div>`;
-
-const hhmm = ms => { const d = new Date(ms); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
-
-// A wheel gives only a clock time: today at that time, or yesterday if that is in the future.
-function todayAt(hhmmStr, now = Date.now()) {
-  const [h, m] = hhmmStr.split(':').map(Number);
-  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
-  const d = new Date(now); d.setHours(h, m, 0, 0);
-  if (d.getTime() > now) d.setDate(d.getDate() - 1);
-  return d.getTime();
-}
 
 const head = (tone, ico, title, meta = '') => `
   <div class="card-head">
