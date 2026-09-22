@@ -359,6 +359,11 @@ button:focus-visible, .chip:focus-visible, .entry:focus-visible { outline: 2px s
 .baby-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .baby-main b { font-size: 15.5px; }
 .avatar.sm { width: 34px; height: 34px; font-size: 15px; }
+.avatar.lg { width: 64px; height: 64px; font-size: 26px; }
+.avatar { overflow: hidden; }
+.avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo-row { display: flex; align-items: center; gap: 12px; margin: 4px 0 12px; }
+.photo-row .btn { flex: 0 1 auto; min-width: 0; }
 
 /* ---- charts -------------------------------------------------------- */
 .viz { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-card); padding: 16px; margin-bottom: 12px; box-shadow: var(--shadow-1); }

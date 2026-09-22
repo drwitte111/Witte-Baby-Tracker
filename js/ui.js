@@ -136,3 +136,21 @@ export function download(filename, text, mime = 'text/csv;charset=utf-8') {
   document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+/**
+ * Read an image file, centre-crop it square and shrink it, returning a JPEG
+ * data URL small enough to live on the profile record (and so sync for free).
+ */
+export async function squarePhoto(file, size = 200, quality = 0.82) {
+  const bitmap = await createImageBitmap(file);
+  const side = Math.min(bitmap.width, bitmap.height);
+  const sx = (bitmap.width - side) / 2, sy = (bitmap.height - side) / 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(bitmap, sx, sy, side, side, 0, 0, size, size);
+  bitmap.close?.();
+  let url = canvas.toDataURL('image/jpeg', quality);
+  if (url.length > 60000) url = canvas.toDataURL('image/jpeg', 0.6);   // busy photo: squeeze harder
+  return url;
+}

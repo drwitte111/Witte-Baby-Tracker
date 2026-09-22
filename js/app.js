@@ -130,7 +130,9 @@ function paintHeader() {
   const name = state.profile?.name || '';
   document.getElementById('profile-name').textContent = name || 'Baby Tracker';
   document.getElementById('profile-age').textContent = ageFrom(state.profile?.birth);
-  document.getElementById('profile-avatar').textContent = (name.trim()[0] || '•').toUpperCase();
+  const av = document.getElementById('profile-avatar');
+  if (state.profile?.photo) av.innerHTML = `<img src="${state.profile.photo}" alt="">`;
+  else av.textContent = (name.trim()[0] || '•').toUpperCase();
 }
 
 async function paintRoute(route) {
