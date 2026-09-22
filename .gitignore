@@ -3,3 +3,7 @@
 !sample/*.csv
 .DS_Store
 node_modules/
+sdktest/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log

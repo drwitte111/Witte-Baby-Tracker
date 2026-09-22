@@ -2,6 +2,7 @@
 import { db } from './db.js';
 import { initTooltips, toast } from './ui.js';
 import { ageFrom } from './format.js';
+import { init as initSync, attachLocalPusher, markMetaDirty } from './sync.js';
 
 import * as home from './views/home.js';
 import * as log from './views/log.js';
@@ -31,8 +32,8 @@ const ctx = {
 
   async setActiveFeed(v) { state.activeFeed = v; await db.metaSet('activeFeed', v); syncWakeLock(); },
   async setActiveSleep(v) { state.activeSleep = v; await db.metaSet('activeSleep', v); },
-  async setProfile(v) { state.profile = v; await db.metaSet('profile', v); paintHeader(); },
-  async setUnits(v) { state.units = v; await db.metaSet('units', v); ctx.refresh(); },
+  async setProfile(v) { state.profile = v; await db.metaSet('profile', v); await markMetaDirty('profile'); paintHeader(); },
+  async setUnits(v) { state.units = v; await db.metaSet('units', v); await markMetaDirty('units'); ctx.refresh(); },
   async setCaregiver(v) { state.caregiver = v; await db.metaSet('caregiver', v); },
 };
 
@@ -106,6 +107,17 @@ function initTheme() {
   });
 }
 
+// Profile and units can change on the other device too.
+async function reloadSharedState() {
+  const [profile, units] = await Promise.all([
+    db.metaGet('profile', state.profile),
+    db.metaGet('units', state.units),
+  ]);
+  state.profile = profile;
+  state.units = { ...DEFAULT_UNITS, ...units };
+  paintHeader();
+}
+
 async function boot() {
   initTheme();
   initTooltips();
@@ -135,6 +147,19 @@ async function boot() {
   startTicker();
   syncWakeLock();
   await renderRoute(currentRoute());
+
+  // Rows arriving from the other caregiver's phone repaint the current screen.
+  let remoteRepaint;
+  db.onChange(reason => {
+    if (reason !== 'remote') return;
+    clearTimeout(remoteRepaint);
+    remoteRepaint = setTimeout(async () => {
+      await reloadSharedState();
+      renderRoute(currentRoute());
+    }, 250);
+  });
+  attachLocalPusher();
+  initSync();
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     navigator.serviceWorker.register(new URL('../sw.js', import.meta.url), { scope: './' })

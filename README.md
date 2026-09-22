@@ -48,12 +48,62 @@ Growth measurements are stored canonically in grams and centimetres, so a file m
 `IN` head measurements (as the Nara export does) converts cleanly and displays in whichever
 unit you pick.
 
+## Sync between caregivers (optional)
+
+Sync is off until you connect a Firebase project of your own. Everything below is one-time
+setup; after it, both phones show the same data within a second or two, and each phone keeps
+working with no signal — changes queue and upload when it reconnects.
+
+### Make the Firebase project
+
+1. [console.firebase.google.com](https://console.firebase.google.com) → **Add project**
+   (Google Analytics is not needed).
+2. **Build → Firestore Database → Create database** → *production mode* → pick the region
+   closest to you.
+3. **Build → Authentication → Get started → Email/Password → Enable**.
+4. **Project settings (gear) → Your apps → Web (`</>`)** → register the app → copy the
+   `firebaseConfig` snippet it shows.
+5. **Firestore → Rules** → paste the contents of [`firestore.rules`](firestore.rules) →
+   **Publish**. (Or `firebase deploy --only firestore:rules` with the included
+   `firebase.json`.) Do this before signing in — the default production rules deny everything.
+
+### Connect the phones
+
+1. On the first phone: **More → Sync**, paste the config snippet, **Connect project**.
+2. Create an account with your email, then **Create a family**. Any history already on that
+   phone uploads.
+3. **Invite caregiver** gives an 8-character code, good for 24 hours.
+4. On the second phone: same config snippet, create their *own* account, enter the code.
+   The whole history downloads.
+
+The config snippet is not a secret — Firebase web keys are public by design, and
+`firestore.rules` is what actually protects the data: only members of your family can read or
+write its entries, and a stranger can only join while an invite is open and unexpired. That is
+covered by [`test/rules.test.mjs`](test/rules.test.mjs).
+
+### How it behaves
+
+- **Local-first.** IndexedDB stays the source of truth; Firestore is the shared copy. Signing
+  out leaves the data on the device.
+- **Offline.** Entries logged with no signal are marked dirty and pushed on reconnect.
+- **Conflicts** resolve last-write-wins per entry, on the editing device's clock. Two people
+  editing the same entry within seconds is the only case where one edit wins silently.
+- **Deletes travel as tombstones**, so a delete on one phone doesn't sync back from the other.
+- **Shared settings.** Baby name, birth date and units sync; the caregiver name on each device
+  stays local, so entries record who logged them.
+- **Cost.** The free Spark tier allows 50k reads and 20k writes a day. A first sync of ~3,800
+  entries uses about 3,800 writes; ordinary daily use is a few dozen operations.
+
 ## Data and privacy
 
-Everything is local. There is no backend, no analytics, and no network request after the page
-loads. That also means **there is no sync between devices and no backup** — export to CSV
-regularly, especially before clearing browser data. The app asks the browser for persistent
-storage on the More screen and tells you whether it was granted.
+With sync off, everything is local: no backend, no analytics, and no network request after the
+page loads — which also means no backup, so export to CSV regularly. With sync on, the only
+service involved is your own Firebase project; nothing is sent anywhere else, and the Firebase
+SDK is fetched from Google's CDN only once sync is connected.
+
+The app asks the browser for persistent storage on the More screen and tells you whether it was
+granted. **Delete all data** clears this device when sync is off, and deletes for the whole
+family when it is on (it says which).
 
 Personal exports are git-ignored; don't commit them.
 
@@ -71,6 +121,7 @@ manifest.webmanifest  PWA manifest
 sw.js                 cache-first service worker
 assets/styles.css     tokens, light + dark themes, components
 js/app.js             boot, state, hash router, one-second ticker, wake lock
+js/sync.js            optional Firebase sync: outbox, watermark pull, families, invites
 js/db.js              IndexedDB (events + meta stores)
 js/model.js           event shapes, derived values, day/night aggregation
 js/format.js          durations, relative time, unit conversion
@@ -78,11 +129,14 @@ js/csv.js             Nara CSV parser and writer
 js/charts.js          inline-SVG bar / stacked / line / rhythm charts
 js/forms.js           add & edit sheets
 js/ui.js              sheets, toasts, confirm, tooltips, download
-js/views/*.js         home, log, stats, growth, settings
+js/views/*.js         home, log, stats, growth, settings, sync card
+firestore.rules       security rules — paste into the Firebase console
+firebase.json         rules deploy + emulator config for the test suites
+test/                 rules and two-device sync tests (emulator-based)
 ```
 
 ## Not included
 
-Multi-caregiver sync, WHO percentile curves, bottle/pump entry UI, reminders, and photo
-journaling. The importer preserves the bottle and pump rows so any of those can be added later
-without a data migration.
+WHO percentile curves, bottle/pump entry UI, reminders, and photo journaling. The importer
+preserves the bottle and pump rows so any of those can be added later without a data
+migration.

@@ -32,7 +32,7 @@ export function newId(prefix = 'l') {
 }
 
 export function makeEvent(type, fields = {}) {
-  return {
+  const row = {
     id: fields.id || newId(),
     type,
     start: fields.start ?? Date.now(),
@@ -43,6 +43,10 @@ export function makeEvent(type, fields = {}) {
     updated: Date.now(),
     ...fields,
   };
+  // Optional CSV columns arrive as undefined; Firestore refuses to store that,
+  // and an absent key means the same thing everywhere else.
+  for (const k of Object.keys(row)) if (row[k] === undefined) delete row[k];
+  return row;
 }
 
 /* ---- derived ---- */
