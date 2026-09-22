@@ -1,8 +1,10 @@
-// Cache-first shell so the app opens offline; the network refreshes it in the background.
-const CACHE = 'witte-baby-v3';
+// Network-first for everything the app is made of, cache as the offline fallback.
+// Cache-first looked faster but meant every deploy left phones on a mix of old
+// and new files until the second launch — with a module app that is a broken app.
+const CACHE = 'witte-baby-v4';
 const SHELL = [
   './', './index.html', './assets/styles.css', './assets/icon.svg',
-  './assets/icon-180.png', './assets/icon-192.png',
+  './assets/icon-180.png', './assets/icon-192.png', './assets/firebase-config.js',
   './manifest.webmanifest',
   './js/app.js', './js/db.js', './js/ui.js', './js/model.js', './js/format.js',
   './js/csv.js', './js/charts.js', './js/forms.js', './js/sync.js',
@@ -24,12 +26,11 @@ self.addEventListener('fetch', e => {
   const { request } = e;
   if (request.method !== 'GET' || new URL(request.url).origin !== location.origin) return;
   e.respondWith(
-    caches.match(request).then(hit => {
-      const net = fetch(request).then(res => {
+    fetch(request)
+      .then(res => {
         if (res.ok) caches.open(CACHE).then(c => c.put(request, res.clone()));
         return res;
-      }).catch(() => hit);
-      return hit || net;
-    })
+      })
+      .catch(() => caches.match(request).then(hit => hit || caches.match('./index.html')))
   );
 });

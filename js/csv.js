@@ -257,7 +257,7 @@ export function toNaraCsv(events, profile, units = { weight: 'lb', length: 'in' 
         break;
       case T.SLEEP:
         r['Type'] = 'Sleep';
-        r['[Sleep] Duration (Seconds)'] = ev.end ? Math.round((ev.end - ev.start) / 1000) : '';
+        r['[Sleep] Duration (Seconds)'] = ev.end ? (ev.durationSec || Math.round((ev.end - ev.start) / 1000)) : '';
         r['[Sleep] End Date/time'] = ev.end ? localStamp(ev.end, tz) : '';
         r['[Sleep] End Date/time (Epoch)'] = ev.end || '';
         break;
