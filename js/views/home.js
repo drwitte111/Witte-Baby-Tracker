@@ -3,8 +3,7 @@
 import { db } from '../db.js';
 import { T, makeEvent, feedSeconds, sleepSeconds, nextSide, feedLabel, diaperLabel, summarizeDay, sleepSecondsPerDay } from '../model.js';
 import { ago, clock, dur, time, startOfDay, weightLabel, lengthLabel, DAY } from '../format.js';
-import { esc, icon, toast, confirm, sheet } from '../ui.js';
-import { toLocalInput, fromLocalInput } from '../format.js';
+import { esc, icon, toast, confirm } from '../ui.js';
 import { addEntry } from '../forms.js';
 
 /* ---- active-session helpers (persisted, so a refresh mid-feed loses nothing) ---- */
@@ -45,13 +44,28 @@ function shiftStart(session, newStart, creditKey) {
   return out;
 }
 
-const earlierRow = (act, label) => `<div class="row adjust">
+// "Set time" is a real <input type="time"> laid invisibly over the chip, so the
+// tap goes straight to the phone's time wheel — no sheet, no date field.
+const earlierRow = (act, label, startMs) => `<div class="row adjust">
   <span class="adjust-label">${label}</span>
   <button class="chip" data-act="${act}" data-min="1">−1m</button>
   <button class="chip" data-act="${act}" data-min="2">−2m</button>
   <button class="chip" data-act="${act}" data-min="5">−5m</button>
-  <button class="chip" data-act="${act}-set">${icon('i-clock')}Set time</button>
+  <label class="chip set-time">${icon('i-clock')}Set time
+    <input type="time" step="60" value="${hhmm(startMs)}" data-set="${act}" aria-label="${label} Set the exact time">
+  </label>
 </div>`;
+
+const hhmm = ms => { const d = new Date(ms); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+
+// A wheel gives only a clock time: today at that time, or yesterday if that is in the future.
+function todayAt(hhmmStr, now = Date.now()) {
+  const [h, m] = hhmmStr.split(':').map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+  const d = new Date(now); d.setHours(h, m, 0, 0);
+  if (d.getTime() > now) d.setDate(d.getDate() - 1);
+  return d.getTime();
+}
 
 const head = (tone, ico, title, meta = '') => `
   <div class="card-head">
@@ -106,7 +120,7 @@ export async function render(root, ctx) {
         <button class="btn soft" data-act="feed-switch">${icon('i-switch')}Switch to ${feed.side === 'LEFT' ? 'right' : 'left'}</button>
         <button class="btn soft" data-act="feed-pause">${icon(feed.running ? 'i-pause' : 'i-play')}${feed.running ? 'Pause' : 'Resume'}</button>
       </div>
-      ${earlierRow('feed-earlier', `Latched before ${esc(time(feed.start))}?`)}
+      ${earlierRow('feed-earlier', `Latched before ${esc(time(feed.start))}?`, feed.start)}
       <div class="row">
         <button class="btn tone" data-act="feed-save">${icon('i-check')}Save feed</button>
         <button class="btn ghost" data-act="feed-discard">Discard</button>
@@ -138,7 +152,7 @@ export async function render(root, ctx) {
         <button class="btn tone" data-act="sleep-wake">${icon('i-check')}Woke up</button>
         <button class="btn soft" data-act="sleep-pause">${icon(ss.running ? 'i-pause' : 'i-play')}${ss.running ? 'Pause' : 'Resume'}</button>
       </div>
-      ${earlierRow('sleep-earlier', 'Fell asleep earlier?')}
+      ${earlierRow('sleep-earlier', 'Fell asleep earlier?', ss.start)}
       <div class="row"><button class="btn ghost wide" data-act="sleep-discard">Discard</button></div>
     </section>`;
   } else {
@@ -209,6 +223,25 @@ function tick(root, ctx) {
 }
 
 function wire(root, ctx) {
+  root.addEventListener('change', async e => {
+    const input = e.target.closest('input[data-set]');
+    if (!input) return;
+    const now = Date.now();
+    const t = todayAt(input.value, now);
+    if (t == null) return;
+    if (input.dataset.set === 'sleep-earlier' && ctx.state.activeSleep) {
+      const s = bankSleep(ctx.state.activeSleep, now);
+      await ctx.setActiveSleep(shiftStart(s, t, 'elapsedSec'));
+      toast(`Fell asleep ${time(t)} · ${dur((now - t) / 1000)} ago`);
+    } else if (input.dataset.set === 'feed-earlier' && ctx.state.activeFeed) {
+      const s = accrue(ctx.state.activeFeed, now);
+      const key = (s.beginSide || s.side) === 'LEFT' ? 'leftSec' : 'rightSec';
+      await ctx.setActiveFeed(shiftStart(s, t, key));
+      toast(`Started ${time(t)} · ${dur((now - t) / 1000)} ago`);
+    }
+    ctx.refresh();
+  });
+
   root.addEventListener('click', async e => {
     const btn = e.target.closest('[data-act]');
     if (!btn) return;
@@ -277,31 +310,12 @@ function wire(root, ctx) {
         break;
       }
 
-      case 'sleep-earlier-set': {
-        const s = bankSleep(ctx.state.activeSleep, now);
-        const t = await pickTime('When did she fall asleep?', s.start, now);
-        if (t == null) return;
-        await ctx.setActiveSleep(shiftStart(s, t, 'elapsedSec'));
-        ctx.refresh();
-        break;
-      }
-
       case 'feed-earlier': {
         const s = accrue(ctx.state.activeFeed, now);
         const key = (s.beginSide || s.side) === 'LEFT' ? 'leftSec' : 'rightSec';
         await ctx.setActiveFeed(shiftStart(s, s.start - Number(btn.dataset.min) * 60000, key));
         ctx.refresh();
         toast(`Started ${time(ctx.state.activeFeed.start)} · ${dur((now - ctx.state.activeFeed.start) / 1000)} ago`);
-        break;
-      }
-
-      case 'feed-earlier-set': {
-        const s = accrue(ctx.state.activeFeed, now);
-        const t = await pickTime('When did the feed start?', s.start, now);
-        if (t == null) return;
-        const key = (s.beginSide || s.side) === 'LEFT' ? 'leftSec' : 'rightSec';
-        await ctx.setActiveFeed(shiftStart(s, t, key));
-        ctx.refresh();
         break;
       }
 
@@ -342,24 +356,5 @@ function wire(root, ctx) {
       case 'growth-add':   await addEntry(T.GROWTH, ctx); break;
       case 'go-growth':    ctx.go('growth'); break;
     }
-  });
-}
-
-
-/** Small sheet with one datetime field. Resolves to ms, or null. */
-async function pickTime(title, current, latest) {
-  return sheet({
-    title,
-    body: `<label class="field"><span>Time</span>
-      <input type="datetime-local" name="t" value="${toLocalInput(current)}" max="${toLocalInput(latest)}" step="60"></label>`,
-    actions: [{
-      label: 'Use this time', cls: 'primary',
-      onClick: root => {
-        const t = fromLocalInput(root.querySelector('[name="t"]').value);
-        if (!t) { toast('Enter a valid time'); return false; }
-        if (t > latest) { toast('That is in the future'); return false; }
-        return t;
-      },
-    }],
   });
 }
