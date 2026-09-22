@@ -77,13 +77,18 @@ export function diaperLabel(ev) {
   return 'Dry';
 }
 
-// "Left 12m" for one side, "L 8m · R 6m · 14m" when both were nursed.
-export function feedLabel(ev) {
+const mins = sec => `${Math.max(1, Math.round(sec / 60))}m`;
+
+/**
+ * Words for a feed's sides.
+ *   full:    "Left 12m" · "Left 8m · Right 6m · 14m total"
+ *   compact: "Left side" · "Left 8m · Right 6m"   (for rows that show the total elsewhere)
+ */
+export function feedLabel(ev, { compact = false } = {}) {
   const l = ev.leftSec || 0, r = ev.rightSec || 0;
-  const m = sec => `${Math.max(1, Math.round(sec / 60))}m`;
-  if (l && r) return `L ${m(l)} · R ${m(r)} · ${m(l + r)} total`;
-  if (l) return `Left ${m(l)}`;
-  if (r) return `Right ${m(r)}`;
+  if (l && r) return `Left ${mins(l)} · Right ${mins(r)}${compact ? '' : ` · ${mins(l + r)} total`}`;
+  if (l) return compact ? 'Left side' : `Left ${mins(l)}`;
+  if (r) return compact ? 'Right side' : `Right ${mins(r)}`;
   return 'no duration';
 }
 

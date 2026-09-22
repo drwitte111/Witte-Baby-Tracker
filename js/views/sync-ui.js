@@ -1,7 +1,9 @@
 // The Sync card on the More screen: project config, account, family, invites.
 import { sync, onSyncChange, setConfig, clearConfig, parseConfig, isBaked, needsSignIn, budget, QUOTA,
-         signUp, signIn, signOutNow, createFamily, joinFamily, uploadEverything,
-         createInvite, revokeInvites, pushNow, init as initSync } from '../sync.js';
+         uploadEverything, pushNow, init as initSync } from '../sync.js';
+
+// Account, family and invite actions only exist with REQUIRE_SIGN_IN; fetch them when needed.
+const accounts = () => import('../sync-accounts.js');
 import { esc, icon, toast, confirm, sheet } from '../ui.js';
 import { db } from '../db.js';
 import { ago } from '../format.js';
@@ -163,10 +165,10 @@ export function wireSync(root, ctx) {
           if (!email || !password) return toast('Email and password are required');
           busy(true);
           if (act === 'sign-up') {
-            await signUp(email, password, name);
+            await (await accounts()).signUp(email, password, name);
             toast('Account created');
           } else {
-            await signIn(email, password);
+            await (await accounts()).signIn(email, password);
             toast('Signed in');
           }
           if (name) await ctx.setCaregiver(name);
@@ -175,13 +177,13 @@ export function wireSync(root, ctx) {
 
         case 'sign-out':
           if (!await confirm('Sign out? Data already on this device stays.', { okLabel: 'Sign out' })) return;
-          await signOutNow();
+          await (await accounts()).signOutNow();
           break;
 
         case 'create-family': {
           busy(true);
           const name = ctx.state.profile?.name ? `${ctx.state.profile.name}'s family` : 'Our family';
-          await createFamily(name);
+          await (await accounts()).createFamily(name);
           toast('Family created — uploading your history');
           break;
         }
@@ -190,13 +192,13 @@ export function wireSync(root, ctx) {
           const code = field('code').value.trim();
           if (!code) return toast('Enter the invite code');
           busy(true);
-          await joinFamily(code);
+          await (await accounts()).joinFamily(code);
           toast('Joined — syncing');
           break;
         }
 
         case 'invite': {
-          const { code, expires } = await createInvite();
+          const { code, expires } = await (await accounts()).createInvite();
           await sheet({
             title: 'Invite the other caregiver',
             body: `<p class="sub">On their phone: open this app, connect the same Firebase project,
@@ -205,7 +207,7 @@ export function wireSync(root, ctx) {
               <p class="sub">Valid until ${esc(new Date(expires).toLocaleString())}.</p>`,
             actions: [
               { label: 'Copy code', cls: 'primary', onClick: () => { navigator.clipboard?.writeText(code); toast('Copied'); return false; } },
-              { label: 'Close invites now', cls: 'ghost', onClick: async (_b, close) => { await revokeInvites(); toast('Invites closed'); close(null); return false; } },
+              { label: 'Close invites now', cls: 'ghost', onClick: async (_b, close) => { await (await accounts()).revokeInvites(); toast('Invites closed'); close(null); return false; } },
             ],
           });
           break;

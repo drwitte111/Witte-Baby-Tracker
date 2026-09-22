@@ -22,11 +22,7 @@ function daySummary(events, filter) {
 
 export function summaryLine(ev, units) {
   switch (ev.type) {
-    case T.FEED: {
-      const l = ev.leftSec || 0, r = ev.rightSec || 0;
-      const m = sec => `${Math.max(1, Math.round(sec / 60))}m`;
-      return l && r ? `Left ${m(l)} · Right ${m(r)}` : l ? 'Left side' : r ? 'Right side' : 'no duration';
-    }
+    case T.FEED:   return feedLabel(ev, { compact: true });   // duration has its own slot
     case T.SLEEP:  return ev.end ? `${time(ev.start)} – ${time(ev.end)}` : 'in progress';
     case T.DIAPER: return `${diaperLabel(ev)}${ev.blowout ? ' · blowout' : ''}${ev.color ? ` · ${ev.color.toLowerCase()}` : ''}${ev.texture ? ` · ${ev.texture.toLowerCase()}` : ''}`;
     case T.GROWTH: return [

@@ -27,8 +27,12 @@ The app reads two localStorage overrides, set by the test harness:
 
 | File | Covers |
 |---|---|
+| `sessions.test.mjs` | Timer arithmetic (pause, switch sides, started-earlier, wheel time rollover). No browser, no emulator: `node test/sessions.test.mjs` |
 | `rules.test.mjs` | Firestore rules: the app's one shared path is readable and writable, and every other path in the project is denied |
-| `sync.e2e.mjs` | Two browser contexts as two phones: import 3,841 rows, connect, bulk upload, second phone pulls the whole history with nothing to sign into, entries travel both ways, and an entry logged offline arrives after reconnecting |
+| `sync.e2e.mjs` | Two phones: import 3,841 rows, bulk upload, second phone pulls the whole history with nothing to sign into, entries travel both ways, an entry logged offline arrives after reconnecting |
+| `babies.e2e.mjs` | Two phones: an import creates the baby on both, adding a second baby switches both phones, each baby's log stays separate |
+| `timers.e2e.mjs` | Two phones: a sleep started on one shows on the other, either can adjust or end it, and the widget's status document decodes through the REST API |
+| `quota.e2e.mjs` | A phone with a forced 150-write allowance pushes exactly that, parks the rest with a notice, and the other phone receives what was sent |
 
 ```bash
 node test/rules.test.mjs        # exits non-zero if any rule check fails

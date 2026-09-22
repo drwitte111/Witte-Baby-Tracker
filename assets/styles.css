@@ -356,11 +356,6 @@ button:focus-visible, .chip:focus-visible, .entry:focus-visible { outline: 2px s
 .steps { margin: 10px 0 0; padding-left: 20px; font-size: 14px; color: var(--text-secondary); }
 .steps li { margin-bottom: 6px; }
 
-/* settings groups */
-.group { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-card); box-shadow: var(--shadow-1); margin-bottom: 12px; overflow: hidden; }
-.group-title { padding: 14px 16px 6px; font-size: 12.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
-.group-body { padding: 8px 16px 16px; }
-
 /* ---- charts -------------------------------------------------------- */
 .viz { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-card); padding: 16px; margin-bottom: 12px; box-shadow: var(--shadow-1); }
 .viz h3 { font-size: 15.5px; font-weight: 650; letter-spacing: -.005em; }
