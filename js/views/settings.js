@@ -2,7 +2,7 @@
 import { db } from '../db.js';
 import { fromNaraCsv, toNaraCsv } from '../csv.js';
 import { T } from '../model.js';
-import { esc, icon, toast, confirm, sheet, shareOrDownload } from '../ui.js';
+import { esc, icon, toast, confirm, sheet, shareOrDownload, squarePhoto } from '../ui.js';
 import { toDateInput, ageFrom } from '../format.js';
 import { syncCard, wireSync } from './sync-ui.js';
 import { sync, pushNow } from '../sync.js';
@@ -14,13 +14,19 @@ function babiesCard(ctx, v) {
       <span class="meta">${ctx.state.profiles.length === 1 ? 'tracking' : `${ctx.state.profiles.length} on this family`}</span></div>
     <div class="baby-list">
       ${ctx.state.profiles.map(b => `<button class="baby ${b.id === ctx.state.current ? 'on' : ''}" data-act="select-baby" data-id="${esc(b.id)}">
-        <span class="avatar sm">${esc((b.name || '•').trim()[0].toUpperCase())}</span>
+        <span class="avatar sm">${b.photo ? `<img src="${b.photo}" alt="">` : esc((b.name || '•').trim()[0].toUpperCase())}</span>
         <span class="baby-main"><b>${esc(b.name || 'Baby')}</b>
           <span class="muted">${esc(ageFrom(b.birth) || 'birth date not set')} · ${v.counts[b.id] || 0} entries</span></span>
         ${b.id === ctx.state.current ? `<span class="pill">showing</span>` : ''}
       </button>`).join('') || '<p class="sub">No baby yet — add one below or import a Nara export.</p>'}
     </div>
     ${v.p.id ? `<p class="sub" style="margin-top:12px"><b>${esc(v.p.name || 'Baby')}</b> · edit</p>
+    <div class="photo-row">
+      <span class="avatar lg">${v.p.photo ? `<img src="${v.p.photo}" alt="">` : esc((v.p.name || '•').trim()[0].toUpperCase())}</span>
+      <label class="btn soft">${icon('i-plus', 'sm')}${v.p.photo ? 'Change photo' : 'Add photo'}
+        <input type="file" accept="image/*" id="baby-photo" style="display:none"></label>
+      ${v.p.photo ? `<button class="btn ghost" data-act="remove-photo">Remove</button>` : ''}
+    </div>
     <label class="field"><span>Name</span><input name="name" value="${esc(v.p.name || '')}" placeholder="Baby"></label>
     <label class="field"><span>Birth date</span><input type="date" name="birth" value="${v.p.birth ? toDateInput(v.p.birth) : ''}"></label>` : ''}
     <label class="field"><span>Your name <span class="muted">(saved on entries you add, this phone only)</span></span>
@@ -112,6 +118,20 @@ export async function render(root, ctx) {
     .map(f => f(ctx, view)).join('');
 
   wireSync(root, ctx);
+
+  root.querySelector('#baby-photo')?.addEventListener('change', async e => {
+    const file = e.target.files?.[0];
+    if (!file || !ctx.state.profile) return;
+    try {
+      const photo = await squarePhoto(file);
+      await ctx.saveProfile({ ...ctx.state.profile, photo });
+      toast('Photo saved');
+      ctx.refresh();
+    } catch (err) {
+      console.error(err);
+      toast('Could not read that image');
+    } finally { e.target.value = ''; }
+  });
 
   /* persistent storage: ask the browser not to evict the database */
   navigator.storage?.persisted?.().then(async persisted => {
@@ -207,6 +227,13 @@ export async function render(root, ctx) {
         const on = b.dataset.look === ctx.look;
         b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on));
       });
+    }
+
+    if (act === 'remove-photo') {
+      const { photo, ...rest } = ctx.state.profile;
+      await ctx.saveProfile({ ...rest, photo: null });
+      toast('Photo removed');
+      ctx.refresh();
     }
 
     if (act === 'select-baby') {
