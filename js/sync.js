@@ -425,7 +425,9 @@ async function publishStatus() {
 export async function markMetaDirty(key) {
   if (!SYNCED_META.includes(key)) return;
   await db.metaSet(`${key}:dirty`, Date.now());
-  schedulePush();
+  // A timer starting or stopping is what the other phone is waiting on: no batching delay.
+  if (key === 'activeSleep' || key === 'activeFeed') pushNow().catch(err => announce({ error: describe(err) }));
+  else schedulePush();
 }
 
 /** Mark every local row for upload — used when a device first joins a family. */
@@ -458,4 +460,8 @@ function describe(err) {
 export function attachLocalPusher() {
   db.onChange(reason => { if (reason === 'local') schedulePush(); });
   addEventListener('online', () => schedulePush());
+  // Coming back to the foreground: send anything that queued while iOS had us frozen.
+  addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') pushNow().catch(() => {});
+  });
 }
