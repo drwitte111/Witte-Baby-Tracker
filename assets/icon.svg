@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Baby tracker">
+  <rect width="512" height="512" rx="112" fill="#2a78d6"/>
+  <!-- crescent: night, the thing a baby tracker is mostly about -->
+  <path d="M300 96a160 160 0 1 0 116 271 128 128 0 1 1-116-271z" fill="#ffffff"/>
+  <!-- feed ticks, echoing the rhythm chart -->
+  <g fill="#eb6834">
+    <rect x="120" y="392" width="26" height="26" rx="13"/>
+    <rect x="182" y="392" width="26" height="26" rx="13"/>
+    <rect x="244" y="392" width="26" height="26" rx="13"/>
+  </g>
+</svg>

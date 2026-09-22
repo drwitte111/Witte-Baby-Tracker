@@ -1,0 +1,5 @@
+# Personal exports stay out of the repository
+*.csv
+!sample/*.csv
+.DS_Store
+node_modules/
