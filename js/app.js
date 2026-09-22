@@ -198,6 +198,42 @@ function initSwipeNav() {
   }, { passive: true });
 }
 
+/**
+ * Self-update. iOS usually "reopens" a Home Screen app by thawing the frozen
+ * page, so nothing would ever fetch a new build on its own. Instead: every time
+ * the app comes to the foreground (and every 15 minutes while open) it asks
+ * Pages for version.json, which the deploy workflow stamps with the commit.
+ * A different stamp means a newer build is live: reload, unless a sheet is
+ * open with something half-typed, in which case wait for it to close.
+ */
+let swReg = null, runningVersion = null, pendingReload = false;
+async function fetchVersion() {
+  try {
+    const res = await fetch(new URL('../version.json', import.meta.url), { cache: 'no-store' });
+    if (!res.ok) return null;                   // not deployed via the workflow: nothing to compare
+    return (await res.json()).version || null;
+  } catch { return null; }
+}
+async function checkForUpdate() {
+  swReg?.update().catch(() => {});             // also let the browser look for a new worker
+  const v = await fetchVersion();
+  if (!v) return;
+  if (runningVersion === null) { runningVersion = v; return; }
+  if (v === runningVersion) return;
+  if (document.querySelector('.sheet')) { pendingReload = true; return; }
+  toast('Updating…');
+  setTimeout(() => location.reload(), 400);
+}
+function initUpdateCheck() {
+  checkForUpdate();
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForUpdate(); });
+  setInterval(() => { if (document.visibilityState === 'visible') checkForUpdate(); }, 15 * 60 * 1000);
+  // a deferred reload lands once the sheet the user was in has gone
+  new MutationObserver(() => {
+    if (pendingReload && !document.querySelector('.sheet')) { pendingReload = false; checkForUpdate(); }
+  }).observe(document.getElementById('sheet-root'), { childList: true });
+}
+
 // Keep the chrome clear of the on-screen keyboard (iOS resizes the visual viewport).
 function initKeyboardAware() {
   const vv = window.visualViewport;
@@ -304,15 +340,17 @@ async function boot() {
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     // A new worker taking over means new files are live; reload once to match them
-    // (never mid-timer: running sessions are persisted, so nothing is lost).
+    // (safe mid-timer: running sessions are persisted, so nothing is lost).
     let hadController = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (hadController) location.reload();
       hadController = true;
     });
     navigator.serviceWorker.register(new URL('../sw.js', import.meta.url), { scope: './' })
+      .then(reg => { swReg = reg; })
       .catch(err => console.warn('Service worker not registered:', err));
   }
+  initUpdateCheck();
 }
 
 boot();
