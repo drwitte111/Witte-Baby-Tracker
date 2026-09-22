@@ -1,9 +1,10 @@
 // Home: today at a glance, then one card per activity in a fixed order.
 // A running feed or sleep changes its own card in place — nothing reorders.
 import { db } from '../db.js';
-import { T, makeEvent, feedSeconds, sleepSeconds, nextSide, feedLabel, diaperLabel, summarizeDay } from '../model.js';
-import { ago, clock, dur, time, startOfDay, weightLabel, lengthLabel } from '../format.js';
-import { esc, icon, toast, confirm } from '../ui.js';
+import { T, makeEvent, feedSeconds, sleepSeconds, nextSide, feedLabel, diaperLabel, summarizeDay, sleepSecondsPerDay } from '../model.js';
+import { ago, clock, dur, time, startOfDay, weightLabel, lengthLabel, DAY } from '../format.js';
+import { esc, icon, toast, confirm, sheet } from '../ui.js';
+import { toLocalInput, fromLocalInput } from '../format.js';
 import { addEntry } from '../forms.js';
 
 /* ---- active-session helpers (persisted, so a refresh mid-feed loses nothing) ---- */
@@ -20,6 +21,38 @@ function liveSides(s, now = Date.now()) {
   return { left: a.leftSec || 0, right: a.rightSec || 0, total: (a.leftSec || 0) + (a.rightSec || 0) };
 }
 
+// Sleep session: `start` is when baby fell asleep (adjustable), `elapsedSec` is
+// asleep-time banked before the current run, `sinceTick` is when the current run began.
+function normSleep(s) {
+  if (!s) return null;
+  return { start: s.start, elapsedSec: s.elapsedSec || 0, running: s.running !== false,
+           sinceTick: s.sinceTick || s.start };
+}
+function sleepElapsed(s, now = Date.now()) {
+  const n = normSleep(s);
+  return n.elapsedSec + (n.running ? Math.max(0, (now - n.sinceTick) / 1000) : 0);
+}
+function bankSleep(s, now = Date.now()) {
+  const n = normSleep(s);
+  return n.running ? { ...n, elapsedSec: n.elapsedSec + Math.max(0, (now - n.sinceTick) / 1000), sinceTick: now } : n;
+}
+
+// "It actually started at T": move the start and credit the difference as time asleep / nursed.
+function shiftStart(session, newStart, creditKey) {
+  const delta = (session.start - newStart) / 1000;            // +ve when moved earlier
+  const out = { ...session, start: newStart };
+  out[creditKey] = Math.max(0, (session[creditKey] || 0) + delta);
+  return out;
+}
+
+const earlierRow = (act, label) => `<div class="row adjust">
+  <span class="adjust-label">${label}</span>
+  <button class="chip" data-act="${act}" data-min="5">−5m</button>
+  <button class="chip" data-act="${act}" data-min="10">−10m</button>
+  <button class="chip" data-act="${act}" data-min="15">−15m</button>
+  <button class="chip" data-act="${act}-set">${icon('i-clock')}Set time</button>
+</div>`;
+
 const head = (tone, ico, title, meta = '') => `
   <div class="card-head">
     <span class="chip-ico">${icon(ico)}</span>
@@ -29,23 +62,29 @@ const head = (tone, ico, title, meta = '') => `
 
 export async function render(root, ctx) {
   const now = Date.now();
-  const [lastFeed, lastDiaper, lastSleep, lastGrowth, todayEvents] = await Promise.all([
+  const dayStart = startOfDay(now);
+  const [lastFeed, lastDiaper, lastSleep, lastGrowth, todayEvents, recentSleeps] = await Promise.all([
     db.latest(T.FEED),
     db.latest(T.DIAPER),
     db.latest(T.SLEEP, ev => !!ev.end),          // newest *finished* sleep
     db.latest(T.GROWTH),
-    db.range(startOfDay(now), now + 1),
+    db.range(dayStart, now + 1),
+    db.ofType(T.SLEEP, dayStart - 2 * DAY * 1000, now + 1),
   ]);
   const today = summarizeDay(todayEvents);
+  // Sleep "today" is the hours that fall inside today, so last night's 8pm–7am
+  // counts its morning half. Only finished sleeps count; an open record that was
+  // never closed (Nara exports one) would otherwise run until now.
+  const sleptToday = sleepSecondsPerDay(recentSleeps.filter(e => e.end), 1, now).get(dayStart) || { day: 0, night: 0 };
   const feed = ctx.state.activeFeed;
   const sleeping = ctx.state.activeSleep;
   const u = ctx.state.units;
 
   /* ---- today ribbon ---- */
-  const sleepToday = today.sleepSec + (sleeping ? (now - sleeping.start) / 1000 : 0);
+  const sleepToday = sleptToday.day + sleptToday.night + (sleeping ? sleepElapsed(sleeping, now) : 0);
   const ribbon = `<section class="ribbon" aria-label="Today so far">
     <div class="tone-feed">${icon('i-feed', 'sm')}<b>${today.feeds}</b><span>feeds · ${dur(today.feedSec)}</span></div>
-    <div class="tone-sleep">${icon('i-sleep', 'sm')}<b>${dur(sleepToday)}</b><span>sleep today</span></div>
+    <div class="tone-sleep">${icon('i-sleep', 'sm')}<b>${sleepToday < 60 ? '0m' : dur(sleepToday)}</b><span>sleep today</span></div>
     <div class="tone-diaper">${icon('i-diaper', 'sm')}<b>${today.diapers}</b><span>${today.wet + today.both} wet · ${today.dirty + today.both} dirty</span></div>
   </section>`;
 
@@ -67,6 +106,7 @@ export async function render(root, ctx) {
         <button class="btn soft" data-act="feed-switch">${icon('i-switch')}Switch to ${feed.side === 'LEFT' ? 'right' : 'left'}</button>
         <button class="btn soft" data-act="feed-pause">${icon(feed.running ? 'i-pause' : 'i-play')}${feed.running ? 'Pause' : 'Resume'}</button>
       </div>
+      ${earlierRow('feed-earlier', `Latched before ${esc(time(feed.start))}?`)}
       <div class="row">
         <button class="btn tone" data-act="feed-save">${icon('i-check')}Save feed</button>
         <button class="btn ghost" data-act="feed-discard">Discard</button>
@@ -88,14 +128,18 @@ export async function render(root, ctx) {
   /* ---- sleep card: awake or sleeping, same slot ---- */
   let sleepCard;
   if (sleeping) {
+    const ss = normSleep(sleeping);
     sleepCard = `<section class="card active tone-sleep" id="sleep-card">
-      ${head('sleep', 'i-sleep', '<span class="pulse"></span>Sleeping', `since ${esc(time(sleeping.start))}`)}
-      <div class="since live" data-live="sleep-elapsed">${dur((now - sleeping.start) / 1000)}</div>
-      <p class="sub">Tap when ${esc(ctx.state.profile?.name || 'baby')} wakes</p>
+      ${head('sleep', 'i-sleep', `<span class="pulse"${ss.running ? '' : ' style="animation:none;opacity:.4"'}></span>${ss.running ? 'Sleeping' : 'Sleep paused'}`,
+             `<span class="pill">${ss.running ? 'since ' + esc(time(ss.start)) : 'paused'}</span>`)}
+      <div class="since live" data-live="sleep-elapsed">${dur(sleepElapsed(ss, now))}</div>
+      <p class="sub">Fell asleep ${esc(time(ss.start))}${ss.running ? '' : ' · timer stopped while awake'}</p>
       <div class="row">
         <button class="btn tone" data-act="sleep-wake">${icon('i-check')}Woke up</button>
-        <button class="btn ghost" data-act="sleep-discard">Discard</button>
+        <button class="btn soft" data-act="sleep-pause">${icon(ss.running ? 'i-pause' : 'i-play')}${ss.running ? 'Pause' : 'Resume'}</button>
       </div>
+      ${earlierRow('sleep-earlier', 'Fell asleep earlier?')}
+      <div class="row"><button class="btn ghost wide" data-act="sleep-discard">Discard</button></div>
     </section>`;
   } else {
     const finished = lastSleep;
@@ -152,7 +196,7 @@ function tick(root, ctx) {
   }
   if (ctx.state.activeSleep) {
     const el = root.querySelector('[data-live="sleep-elapsed"]');
-    if (el) el.textContent = dur((now - ctx.state.activeSleep.start) / 1000);
+    if (el) el.textContent = dur(sleepElapsed(ctx.state.activeSleep, now));
   }
   for (const key of ['feed-since', 'wake-since', 'diaper-since']) {
     const el = root.querySelector(`[data-live="${key}"]`);
@@ -214,19 +258,63 @@ function wire(root, ctx) {
         break;
 
       case 'sleep-start':
-        await ctx.setActiveSleep({ start: now });
+        await ctx.setActiveSleep({ start: now, elapsedSec: 0, running: true, sinceTick: now });
         ctx.refresh();
         break;
 
+      case 'sleep-pause': {
+        const s = bankSleep(ctx.state.activeSleep, now);
+        await ctx.setActiveSleep({ ...s, running: !normSleep(ctx.state.activeSleep).running, sinceTick: now });
+        ctx.refresh();
+        break;
+      }
+
+      case 'sleep-earlier': {
+        const s = bankSleep(ctx.state.activeSleep, now);
+        await ctx.setActiveSleep(shiftStart(s, s.start - Number(btn.dataset.min) * 60000, 'elapsedSec'));
+        ctx.refresh();
+        toast(`Start moved to ${time(ctx.state.activeSleep.start)}`);
+        break;
+      }
+
+      case 'sleep-earlier-set': {
+        const s = bankSleep(ctx.state.activeSleep, now);
+        const t = await pickTime('When did she fall asleep?', s.start, now);
+        if (t == null) return;
+        await ctx.setActiveSleep(shiftStart(s, t, 'elapsedSec'));
+        ctx.refresh();
+        break;
+      }
+
+      case 'feed-earlier': {
+        const s = accrue(ctx.state.activeFeed, now);
+        const key = (s.beginSide || s.side) === 'LEFT' ? 'leftSec' : 'rightSec';
+        await ctx.setActiveFeed(shiftStart(s, s.start - Number(btn.dataset.min) * 60000, key));
+        ctx.refresh();
+        toast(`Start moved to ${time(ctx.state.activeFeed.start)}`);
+        break;
+      }
+
+      case 'feed-earlier-set': {
+        const s = accrue(ctx.state.activeFeed, now);
+        const t = await pickTime('When did the feed start?', s.start, now);
+        if (t == null) return;
+        const key = (s.beginSide || s.side) === 'LEFT' ? 'leftSec' : 'rightSec';
+        await ctx.setActiveFeed(shiftStart(s, t, key));
+        ctx.refresh();
+        break;
+      }
+
       case 'sleep-wake': {
-        const s = ctx.state.activeSleep;
+        const s = bankSleep(ctx.state.activeSleep, now);
+        const durationSec = Math.round(s.elapsedSec);
         await db.put(makeEvent(T.SLEEP, {
-          start: s.start, end: now, durationSec: Math.round((now - s.start) / 1000),
+          start: s.start, end: now, durationSec,
           caregiver: ctx.state.caregiver,
         }));
         await ctx.setActiveSleep(null);
         ctx.refresh();
-        toast(`Sleep saved · ${dur((now - s.start) / 1000)}`);
+        toast(`Sleep saved · ${dur(durationSec)}`);
         break;
       }
 
@@ -254,5 +342,24 @@ function wire(root, ctx) {
       case 'growth-add':   await addEntry(T.GROWTH, ctx); break;
       case 'go-growth':    ctx.go('growth'); break;
     }
+  });
+}
+
+
+/** Small sheet with one datetime field. Resolves to ms, or null. */
+async function pickTime(title, current, latest) {
+  return sheet({
+    title,
+    body: `<label class="field"><span>Time</span>
+      <input type="datetime-local" name="t" value="${toLocalInput(current)}" max="${toLocalInput(latest)}" step="60"></label>`,
+    actions: [{
+      label: 'Use this time', cls: 'primary',
+      onClick: root => {
+        const t = fromLocalInput(root.querySelector('[name="t"]').value);
+        if (!t) { toast('Enter a valid time'); return false; }
+        if (t > latest) { toast('That is in the future'); return false; }
+        return t;
+      },
+    }],
   });
 }

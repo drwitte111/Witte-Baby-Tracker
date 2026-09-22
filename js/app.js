@@ -207,6 +207,13 @@ async function boot() {
   initSync();
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    // A new worker taking over means new files are live; reload once to match them
+    // (never mid-timer: running sessions are persisted, so nothing is lost).
+    let hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (hadController) location.reload();
+      hadController = true;
+    });
     navigator.serviceWorker.register(new URL('../sw.js', import.meta.url), { scope: './' })
       .catch(err => console.warn('Service worker not registered:', err));
   }

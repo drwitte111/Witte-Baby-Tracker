@@ -20,7 +20,9 @@ export async function render(root, ctx) {
   const liveSleep = ctx.state.activeSleep
     ? [{ type: T.SLEEP, id: 'live', start: ctx.state.activeSleep.start, end: null }]
     : [];
-  const sleeps = [...events, ...earlier].filter(e => e.type === T.SLEEP).concat(liveSleep);
+  // Finished sleeps plus the timer that is actually running now; an imported
+  // record that was never closed is not "still asleep".
+  const sleeps = [...events, ...earlier].filter(e => e.type === T.SLEEP && e.end).concat(liveSleep);
 
   const buckets = byDay(events, days, now);
   const sleepPerDay = sleepSecondsPerDay(sleeps, days, now);
