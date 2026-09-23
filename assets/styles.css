@@ -89,6 +89,8 @@
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; padding: 0; }
 html { -webkit-text-size-adjust: 100%; }
+/* An app, not a web page: scroll and tap only, no pinch or double-tap zoom. */
+html, body { touch-action: pan-x pan-y; }
 body {
   background: var(--bg);
   color: var(--text-primary);

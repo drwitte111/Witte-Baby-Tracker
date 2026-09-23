@@ -245,6 +245,14 @@ function initUpdateCheck() {
 }
 
 // Keep the chrome clear of the on-screen keyboard (iOS resizes the visual viewport).
+/** iOS still lets an installed app pinch-zoom unless the gesture is refused outright. */
+function initNoZoom() {
+  for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, e => e.preventDefault(), { passive: false });
+  document.addEventListener('touchmove', e => { if (e.scale !== undefined && e.scale !== 1) e.preventDefault(); }, { passive: false });
+  // Double-tap zoom is handled in CSS (touch-action: pan-x pan-y), so quick
+  // repeated taps on the -1/-2/-5 chips still count as taps.
+}
+
 function initKeyboardAware() {
   const vv = window.visualViewport;
   if (!vv) return;
@@ -319,6 +327,7 @@ async function reloadSharedState() {
 async function boot() {
   initTheme();
   initTooltips();
+  initNoZoom();
   initKeyboardAware();
   initSwipeNav();
 
