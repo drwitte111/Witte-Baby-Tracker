@@ -1,0 +1,18 @@
+import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
+const b = await chromium.launch();
+const c = await b.newContext({ viewport: { width: 402, height: 874 }, isMobile: true, hasTouch: true });
+await c.addInitScript(() => localStorage.setItem('installHintDismissed', '1'));
+const p = await c.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
+await p.goto('http://127.0.0.1:8099/', { waitUntil: 'domcontentloaded' }); await p.waitForTimeout(700);
+await p.tap('[data-act="sleep-start"]'); await p.waitForTimeout(500);
+await p.tap('[data-act="sleep-earlier-set"]'); await p.waitForTimeout(400);
+const t = new Date(Date.now() - 37 * 60000), hhmm = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
+await p.fill('.sheet [name="t"]', hhmm); await p.waitForTimeout(400);
+console.log('after scrolling the wheel (no Set yet):', await p.locator('[data-live="sleep-elapsed"]').innerText(), '(must still be seconds)');
+await p.locator('.sheet .btn', { hasText: 'Set' }).click(); await p.waitForTimeout(500);
+console.log('after Set:', await p.locator('[data-live="sleep-elapsed"]').innerText(), '(expect ~37m)');
+await p.tap('[data-act="sleep-earlier-set"]'); await p.waitForTimeout(300);
+await p.fill('.sheet [name="t"]', '00:01'); await p.locator('.sheet .btn', { hasText: 'Cancel' }).click(); await p.waitForTimeout(400);
+console.log('after Cancel:', await p.locator('[data-live="sleep-elapsed"]').innerText(), '(unchanged)');
+console.log(errs.length ? 'ERRORS ' + errs.join('|') : 'no page errors');
+await b.close();
