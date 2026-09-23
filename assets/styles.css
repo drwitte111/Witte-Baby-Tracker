@@ -160,6 +160,7 @@ body.kb-open .tabbar { bottom: -120px; pointer-events: none; }
   padding: 6px 8px calc(6px + var(--safe-b));
 }
 .tab {
+  white-space: nowrap;
   background: none; border: 0; border-radius: 12px; cursor: pointer;
   display: flex; flex-direction: column; align-items: center; gap: 3px;
   font-size: 10.5px; font-weight: 600; letter-spacing: .01em; color: var(--text-muted); padding: 6px 2px 4px; min-height: 50px;
@@ -206,7 +207,8 @@ body.kb-open .tabbar { bottom: -120px; pointer-events: none; }
 .row > * { min-width: 0; }
 .row + .row { margin-top: 8px; }
 .btn {
-  flex: 1 1 0; min-width: 88px; min-height: 50px; cursor: pointer;
+  flex: 1 1 0; min-width: max-content; min-height: 50px; cursor: pointer;
+  white-space: nowrap; overflow-wrap: normal; word-break: normal;
   display: inline-flex; align-items: center; justify-content: center; gap: 7px;
   border: 1px solid var(--border); border-radius: var(--r-btn); background: var(--surface-2);
   font-weight: 620; font-size: 15.5px; padding: 10px 12px; letter-spacing: -.005em;
@@ -233,6 +235,7 @@ body.kb-open .tabbar { bottom: -120px; pointer-events: none; }
   opacity: 0; margin: 0; padding: 0; border: 0; cursor: pointer;   /* the tap lands here → native wheel */
 }
 .chip {
+  white-space: nowrap; overflow-wrap: normal; word-break: normal;
   border: 1px solid var(--border); background: var(--surface-1); border-radius: var(--r-chip);
   padding: 8px 14px; min-height: 38px; cursor: pointer; font-size: 14px; font-weight: 560; color: var(--text-secondary);
   display: inline-flex; align-items: center; gap: 6px;
@@ -267,7 +270,7 @@ body.kb-open .tabbar { bottom: -120px; pointer-events: none; }
 .timer .big { font-size: 52px; font-weight: 700; letter-spacing: -.035em; line-height: 1; color: var(--tone); }
 .timer .side-tot { display: flex; justify-content: center; gap: 22px; margin-top: 10px; color: var(--text-secondary); font-size: 14px; }
 .side-active { color: var(--tone); font-weight: 650; }
-.pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: color-mix(in srgb, var(--tone, var(--text-secondary)) 14%, var(--surface-1)); color: var(--tone, var(--text-secondary)); }
+.pill { display: inline-block; white-space: nowrap; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: color-mix(in srgb, var(--tone, var(--text-secondary)) 14%, var(--surface-1)); color: var(--tone, var(--text-secondary)); }
 
 /* ---- log ----------------------------------------------------------- */
 .day-head {
@@ -373,7 +376,9 @@ button:focus-visible, .chip:focus-visible, .entry:focus-visible { outline: 2px s
   -webkit-appearance: auto; appearance: auto; }     /* the native slider, track included */
 .frame-zoom .chip { flex: none; min-height: 34px; padding: 4px 12px; }
 .photo-row { display: flex; align-items: center; gap: 12px; margin: 4px 0 12px; }
-.photo-row .btn { flex: 0 1 auto; min-width: 0; }
+.photo-actions { display: flex; flex-wrap: wrap; gap: 8px; flex: 1; min-width: 0; }
+.photo-actions .chip { min-height: 40px; }
+.photo-actions .chip.on { background: color-mix(in srgb, var(--tone) 14%, var(--surface-1)); color: var(--tone-fill); border-color: transparent; }
 
 /* ---- charts -------------------------------------------------------- */
 .viz { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-card); padding: 16px; margin-bottom: 12px; box-shadow: var(--shadow-1); }
