@@ -87,5 +87,28 @@ export async function send(kind, fields = {}) {
     body: JSON.stringify(body),
   });
   if (res.status === 204) return { ok: true };
-  return { error: `GitHub ${res.status}` };
+  const why = res.status === 401 ? 'GitHub rejected the token (401). Paste a fresh one.'
+    : res.status === 403 ? 'Token lacks permission (403): it needs Contents: Read and write on this repo.'
+    : res.status === 404 ? 'GitHub said 404: the token cannot see this repo — check its repository access.'
+    : `GitHub answered ${res.status}.`;
+  return { error: why, status: res.status };
+}
+
+/** Plain-words verdict for a send() result, for a toast. */
+export function explain(r) {
+  if (!r) return '';
+  if (r.ok) return 'Other phone notified';
+  if (r.skipped === 'no-token') return 'Not sent: this phone has no GitHub token (More → Notifications)';
+  return `Not sent: ${r.error}`;
+}
+
+/** How many phones are subscribed to receive. */
+export async function receiverCount() {
+  try {
+    const { SPACE } = await conf();
+    const F = (await import('./sync.js')).firestore();
+    if (!F) return null;
+    const snap = await F.getDocs(F.collection(F.store, 'families', SPACE || 'witte', 'push'));
+    return snap.size;
+  } catch { return null; }
 }

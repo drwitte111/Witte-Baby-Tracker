@@ -3,21 +3,19 @@
 import { db } from '../db.js';
 import { T, makeEvent, feedSeconds, sleepSeconds, nextSide, feedLabel, diaperLabel, summarizeDay, sleepSecondsPerDay } from '../model.js';
 import { ago, clock, dur, time, startOfDay, weightLabel, lengthLabel, DAY } from '../format.js';
-import { esc, icon, toast, confirm } from '../ui.js';
+import { esc, icon, toast, confirm, sheet } from '../ui.js';
 import { accrueFeed as accrue, feedTotals as liveSides, normSleep, sleepElapsed, bankSleep, shiftStart, hhmm, todayAt } from '../sessions.js';
-import { send as notifyOther } from '../push.js';
+import { send as notifyOther, explain as explainSend } from '../push.js';
 import { addEntry } from '../forms.js';
 
-// "Set time" is a real <input type="time"> laid invisibly over the chip, so the
-// tap goes straight to the phone's time wheel — no sheet, no date field.
+// "Set time" opens a sheet with just the phone's time wheel; nothing is applied
+// until Set is tapped, so scrolling the wheel never changes the timer by itself.
 const earlierRow = (act, label, startMs) => `<div class="row adjust">
   <span class="adjust-label">${label}</span>
   <button class="chip" data-act="${act}" data-min="1">−1m</button>
   <button class="chip" data-act="${act}" data-min="2">−2m</button>
   <button class="chip" data-act="${act}" data-min="5">−5m</button>
-  <label class="chip set-time">${icon('i-clock')}Set time
-    <input type="time" step="60" value="${hhmm(startMs)}" data-set="${act}" aria-label="${label} Set the exact time">
-  </label>
+  <button class="chip" data-act="${act}-set">${icon('i-clock')}Set time</button>
 </div>`;
 
 const head = (tone, ico, title, meta = '') => `
@@ -177,24 +175,33 @@ function tick(root, ctx) {
 }
 
 function wire(root, ctx) {
-  root.addEventListener('change', async e => {
-    const input = e.target.closest('input[data-set]');
-    if (!input) return;
+  async function setStart(kind, ctxNow) {
+    const running = kind === 'sleep' ? ctx.state.activeSleep : ctx.state.activeFeed;
+    if (!running) return;
+    const picked = await sheet({
+      title: kind === 'sleep' ? 'When did she fall asleep?' : 'When did the feed start?',
+      body: `<label class="field"><span>Time</span><input type="time" name="t" step="60" value="${hhmm(running.start)}"></label>
+             <p class="muted">Scroll to the time, then tap Set.</p>`,
+      actions: [{ label: 'Set', cls: 'primary', onClick: root => {
+        const t = todayAt(root.querySelector('[name="t"]').value, Date.now());
+        if (t == null) { toast('Pick a time'); return false; }
+        return t;
+      } }],
+    });
+    if (picked == null) return;
     const now = Date.now();
-    const t = todayAt(input.value, now);
-    if (t == null) return;
-    if (input.dataset.set === 'sleep-earlier' && ctx.state.activeSleep) {
+    if (kind === 'sleep') {
       const s = bankSleep(ctx.state.activeSleep, now);
-      await ctx.setActiveSleep(shiftStart(s, t, 'elapsedSec'));
-      toast(`Fell asleep ${time(t)} · ${dur((now - t) / 1000)} ago`);
-    } else if (input.dataset.set === 'feed-earlier' && ctx.state.activeFeed) {
+      await ctx.setActiveSleep(shiftStart(s, picked, 'elapsedSec'));
+      toast(`Fell asleep ${time(picked)} · ${dur((now - picked) / 1000)} ago`);
+    } else {
       const s = accrue(ctx.state.activeFeed, now);
       const key = (s.beginSide || s.side) === 'LEFT' ? 'leftSec' : 'rightSec';
-      await ctx.setActiveFeed(shiftStart(s, t, key));
-      toast(`Started ${time(t)} · ${dur((now - t) / 1000)} ago`);
+      await ctx.setActiveFeed(shiftStart(s, picked, key));
+      toast(`Started ${time(picked)} · ${dur((now - picked) / 1000)} ago`);
     }
     ctx.refresh();
-  });
+  }
 
   root.addEventListener('click', async e => {
     const btn = e.target.closest('[data-act]');
@@ -247,7 +254,7 @@ function wire(root, ctx) {
       case 'sleep-start':
         await ctx.setActiveSleep({ start: now, elapsedSec: 0, running: true, sinceTick: now });
         ctx.refresh();
-        notifyOther('sleep-start', { baby: ctx.state.profile?.name, by: ctx.state.caregiver }).catch(() => {});
+        notifyOther('sleep-start', { baby: ctx.state.profile?.name, by: ctx.state.caregiver }).then(r => { if (!r.ok) toast(explainSend(r), 4000); }).catch(() => {});
         break;
 
       case 'sleep-pause': {
@@ -256,7 +263,7 @@ function wire(root, ctx) {
         await ctx.setActiveSleep({ ...s, running: !wasRunning, sinceTick: now });
         ctx.refresh();
         notifyOther(wasRunning ? 'sleep-pause' : 'sleep-resume',
-          { baby: ctx.state.profile?.name, by: ctx.state.caregiver, elapsed: dur(s.elapsedSec) }).catch(() => {});
+          { baby: ctx.state.profile?.name, by: ctx.state.caregiver, elapsed: dur(s.elapsedSec) }).then(r => { if (!r.ok) toast(explainSend(r), 4000); }).catch(() => {});
         break;
       }
 
@@ -267,6 +274,9 @@ function wire(root, ctx) {
         toast(`Fell asleep ${time(ctx.state.activeSleep.start)} · ${dur((now - ctx.state.activeSleep.start) / 1000)} ago`);
         break;
       }
+
+      case 'sleep-earlier-set': await setStart('sleep'); break;
+      case 'feed-earlier-set':  await setStart('feed'); break;
 
       case 'feed-earlier': {
         const s = accrue(ctx.state.activeFeed, now);
@@ -287,7 +297,7 @@ function wire(root, ctx) {
         await ctx.setActiveSleep(null);
         ctx.refresh();
         toast(`Sleep saved · ${dur(durationSec)}`);
-        notifyOther('sleep-end', { baby: ctx.state.profile?.name, by: ctx.state.caregiver, duration: dur(durationSec) }).catch(() => {});
+        notifyOther('sleep-end', { baby: ctx.state.profile?.name, by: ctx.state.caregiver, duration: dur(durationSec) }).then(r => { if (!r.ok) toast(explainSend(r), 4000); }).catch(() => {});
         break;
       }
 
