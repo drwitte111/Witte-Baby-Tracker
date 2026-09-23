@@ -5,6 +5,7 @@ import { T, makeEvent, feedSeconds, sleepSeconds, nextSide, feedLabel, diaperLab
 import { ago, clock, dur, time, startOfDay, weightLabel, lengthLabel, DAY } from '../format.js';
 import { esc, icon, toast, confirm } from '../ui.js';
 import { accrueFeed as accrue, feedTotals as liveSides, normSleep, sleepElapsed, bankSleep, shiftStart, hhmm, todayAt } from '../sessions.js';
+import { send as notifyOther } from '../push.js';
 import { addEntry } from '../forms.js';
 
 // "Set time" is a real <input type="time"> laid invisibly over the chip, so the
@@ -246,6 +247,7 @@ function wire(root, ctx) {
       case 'sleep-start':
         await ctx.setActiveSleep({ start: now, elapsedSec: 0, running: true, sinceTick: now });
         ctx.refresh();
+        notifyOther('sleep-start', { baby: ctx.state.profile?.name, by: ctx.state.caregiver }).catch(() => {});
         break;
 
       case 'sleep-pause': {
@@ -282,6 +284,7 @@ function wire(root, ctx) {
         await ctx.setActiveSleep(null);
         ctx.refresh();
         toast(`Sleep saved · ${dur(durationSec)}`);
+        notifyOther('sleep-end', { baby: ctx.state.profile?.name, by: ctx.state.caregiver, duration: dur(durationSec) }).catch(() => {});
         break;
       }
 
