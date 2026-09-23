@@ -3,6 +3,7 @@ import { db } from './db.js';
 import { initTooltips, toast } from './ui.js';
 import { ageFrom } from './format.js';
 import { init as initSync, attachLocalPusher, markMetaDirty } from './sync.js';
+import { avatarInner } from './avatar.js';
 
 import * as home from './views/home.js';
 import * as log from './views/log.js';
@@ -130,9 +131,7 @@ function paintHeader() {
   const name = state.profile?.name || '';
   document.getElementById('profile-name').textContent = name || 'Baby Tracker';
   document.getElementById('profile-age').textContent = ageFrom(state.profile?.birth);
-  const av = document.getElementById('profile-avatar');
-  if (state.profile?.photo) av.innerHTML = `<img src="${state.profile.photo}" alt="">`;
-  else av.textContent = (name.trim()[0] || '•').toUpperCase();
+  document.getElementById('profile-avatar').innerHTML = avatarInner(state.profile || { name });
 }
 
 async function paintRoute(route) {

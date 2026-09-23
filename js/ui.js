@@ -138,19 +138,18 @@ export function download(filename, text, mime = 'text/csv;charset=utf-8') {
 }
 
 /**
- * Read an image file, centre-crop it square and shrink it, returning a JPEG
- * data URL small enough to live on the profile record (and so sync for free).
+ * Read an image file and shrink it so its longer side is `max` px, keeping the
+ * whole picture (framing decides the crop later). Returns { url, aspect }.
  */
-export async function squarePhoto(file, size = 200, quality = 0.82) {
+export async function shrinkPhoto(file, max = 480, quality = 0.82) {
   const bitmap = await createImageBitmap(file);
-  const side = Math.min(bitmap.width, bitmap.height);
-  const sx = (bitmap.width - side) / 2, sy = (bitmap.height - side) / 2;
+  const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
+  const w = Math.round(bitmap.width * scale), h = Math.round(bitmap.height * scale);
   const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(bitmap, sx, sy, side, side, 0, 0, size, size);
+  canvas.width = w; canvas.height = h;
+  canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
   bitmap.close?.();
   let url = canvas.toDataURL('image/jpeg', quality);
-  if (url.length > 60000) url = canvas.toDataURL('image/jpeg', 0.6);   // busy photo: squeeze harder
-  return url;
+  if (url.length > 120000) url = canvas.toDataURL('image/jpeg', 0.6);   // busy photo: squeeze harder
+  return { url, aspect: w / h };
 }

@@ -251,9 +251,12 @@ function wire(root, ctx) {
         break;
 
       case 'sleep-pause': {
+        const wasRunning = normSleep(ctx.state.activeSleep).running;
         const s = bankSleep(ctx.state.activeSleep, now);
-        await ctx.setActiveSleep({ ...s, running: !normSleep(ctx.state.activeSleep).running, sinceTick: now });
+        await ctx.setActiveSleep({ ...s, running: !wasRunning, sinceTick: now });
         ctx.refresh();
+        notifyOther(wasRunning ? 'sleep-pause' : 'sleep-resume',
+          { baby: ctx.state.profile?.name, by: ctx.state.caregiver, elapsed: dur(s.elapsedSec) }).catch(() => {});
         break;
       }
 

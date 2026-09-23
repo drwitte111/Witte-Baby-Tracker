@@ -16,6 +16,10 @@ assert.equal(m.body, 'Sleep timer started at 8:41 PM (Alaina)');
 m = compose({ kind: 'sleep-end', baby: 'Nadine', by: 'David', at, tz: 'America/New_York', duration: '1h 12m' });
 assert.equal(m.title, 'Nadine woke up');
 assert.equal(m.body, 'Slept 1h 12m · woke at 8:41 PM (David)');
+m = compose({ kind: 'sleep-pause', baby: 'Nadine', by: 'Alaina', at, tz: 'America/New_York', elapsed: '42m' });
+assert.equal(m.title, 'Nadine stirred'); assert.equal(m.body, 'Sleep timer paused at 42m · 8:41 PM (Alaina)');
+m = compose({ kind: 'sleep-resume', baby: 'Nadine', by: 'Alaina', at, tz: 'America/New_York' });
+assert.equal(m.title, 'Nadine settled'); assert.equal(m.body, 'Sleep timer running again · 8:41 PM (Alaina)');
 assert.deepEqual(compose({ kind: 'test', baby: 'Nadine', text: 'Test from David' }), { title: 'Nadine', body: 'Test from David' });
 console.log('push wording: ok');
 

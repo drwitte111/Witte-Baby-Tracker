@@ -29,6 +29,8 @@ export function compose(p) {
   switch (p.kind) {
     case 'sleep-start': return { title: `${baby} is asleep`, body: `Sleep timer started${at ? ` at ${at}` : ''}${who}` };
     case 'sleep-end':   return { title: `${baby} woke up`, body: `Slept ${p.duration || ''}${at ? ` · woke at ${at}` : ''}${who}`.replace('Slept  ·', 'Woke') };
+    case 'sleep-pause': return { title: `${baby} stirred`, body: `Sleep timer paused${p.elapsed ? ` at ${p.elapsed}` : ''}${at ? ` · ${at}` : ''}${who}` };
+    case 'sleep-resume': return { title: `${baby} settled`, body: `Sleep timer running again${at ? ` · ${at}` : ''}${who}` };
     default:            return { title: baby, body: p.text || 'Update' };
   }
 }
