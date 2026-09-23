@@ -2,6 +2,7 @@
 *.csv
 !sample/*.csv
 .DS_Store
+node_modules
 node_modules/
 sdktest/
 firebase-debug.log
