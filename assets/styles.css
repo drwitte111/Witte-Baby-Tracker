@@ -91,6 +91,9 @@ html, body { margin: 0; padding: 0; }
 html { -webkit-text-size-adjust: 100%; }
 /* An app, not a web page: scroll and tap only, no pinch or double-tap zoom. */
 html, body { touch-action: pan-x pan-y; }
+/* No scrollbars anywhere: content scrolls, the indicator stays hidden. */
+* { scrollbar-width: none; -ms-overflow-style: none; }
+*::-webkit-scrollbar { display: none; width: 0; height: 0; }
 body {
   background: var(--bg);
   color: var(--text-primary);
