@@ -295,6 +295,12 @@ body.kb-open .tabbar { bottom: -120px; pointer-events: none; }
 .entry-sub { color: var(--text-secondary); font-size: 13.5px; margin-top: 1px; }
 .entry-note { color: var(--text-muted); font-size: 13px; font-style: italic; overflow-wrap: anywhere; margin-top: 2px; }
 .entry-dur { font-size: 13px; font-weight: 650; color: var(--tone); white-space: nowrap; }
+.entry.live { border-color: color-mix(in srgb, var(--tone) 45%, var(--border)); background: color-mix(in srgb, var(--tone) 8%, var(--surface-1)); }
+.entry.live::before { background: var(--tone); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 30%, transparent); }
+.entry.live.running::before { animation: pulse 1.6s infinite; }
+@media (prefers-reduced-motion: reduce) { .entry.live.running::before { animation: none } }
+.entry.live .entry-dur { font-variant-numeric: tabular-nums; }
+.entry.live .pill { font-size: 11px; padding: 2px 8px; }
 
 /* ---- forms / sheet -------------------------------------------------- */
 .sheet-backdrop {

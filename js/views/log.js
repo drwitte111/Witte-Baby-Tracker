@@ -4,12 +4,38 @@ import { T, TYPE_META, EDITABLE, feedSeconds, sleepSeconds, feedLabel, diaperLab
 import { dateLong, time, dur, dayKey, weightLabel, lengthLabel, volumeLabel } from '../format.js';
 import { esc, icon } from '../ui.js';
 import { addEntry, editEntry } from '../forms.js';
+import { normSleep, sleepElapsed, feedTotals } from '../sessions.js';
 
 const PAGE = 120;
 let filter = 'all';
 let shown = PAGE;
 
+/**
+ * The running sleep or nursing session, as a row for the timeline. It is not
+ * an event yet (it becomes one when it ends), so the Log shows it live, at
+ * its place in the day, and tapping it goes to the timer on Home.
+ */
+function liveRows(ctx) {
+  const rows = [];
+  const sleep = ctx.state.activeSleep;
+  if (sleep) rows.push({ id: 'live-sleep', live: 'sleep', type: T.SLEEP, start: sleep.start, running: normSleep(sleep).running });
+  const feed = ctx.state.activeFeed;
+  if (feed) rows.push({ id: 'live-feed', live: 'feed', type: T.FEED, start: feed.start, running: !!feed.running, side: feed.side });
+  return rows;
+}
+
+function liveSeconds(row, ctx, now) {
+  return row.live === 'sleep' ? sleepElapsed(ctx.state.activeSleep, now) : feedTotals(ctx.state.activeFeed, now).total;
+}
+
+function liveSub(row) {
+  if (row.live === 'sleep') return row.running ? `Sleeping · since ${time(row.start)}` : `Paused · fell asleep ${time(row.start)}`;
+  const side = row.side === 'LEFT' ? 'Left side' : row.side === 'RIGHT' ? 'Right side' : 'Nursing';
+  return row.running ? `${side} · since ${time(row.start)}` : `Paused · started ${time(row.start)}`;
+}
+
 function daySummary(events, filter) {
+  events = events.filter(e => !e.live);
   const feeds = events.filter(e => e.type === T.FEED);
   const sleeps = events.filter(e => e.type === T.SLEEP && e.end);
   const diapers = events.filter(e => e.type === T.DIAPER);
@@ -17,7 +43,7 @@ function daySummary(events, filter) {
   if (feeds.length && (filter === 'all' || filter === T.FEED)) parts.push(`${feeds.length} feed${feeds.length === 1 ? '' : 's'}`);
   if (sleeps.length && (filter === 'all' || filter === T.SLEEP)) parts.push(dur(sleeps.reduce((a, e) => a + sleepSeconds(e), 0)) + ' sleep');
   if (diapers.length && (filter === 'all' || filter === T.DIAPER)) parts.push(`${diapers.length} diaper${diapers.length === 1 ? '' : 's'}`);
-  return parts.join(' · ') || `${events.length} entr${events.length === 1 ? 'y' : 'ies'}`;
+  return parts.join(' · ') || (events.length ? `${events.length} entr${events.length === 1 ? 'y' : 'ies'}` : 'in progress');
 }
 
 export function summaryLine(ev, units) {
@@ -37,7 +63,8 @@ export function summaryLine(ev, units) {
 }
 
 export async function render(root, ctx) {
-  const all = await db.all();
+  const now = Date.now();
+  const all = [...liveRows(ctx), ...await db.all()].sort((a, b) => b.start - a.start);
   const events = filter === 'all' ? all : all.filter(e => e.type === filter);
   const page = events.slice(0, shown);
 
@@ -68,6 +95,18 @@ export async function render(root, ctx) {
         <span class="muted">${esc(daySummary(day.events, filter))}</span></h2><div class="timeline">`;
       for (const ev of day.events) {
         const m = TYPE_META[ev.type] || { icon: 'i-log', tone: 'tone-neutral', label: ev.type };
+        if (ev.live) {
+          html += `<button class="entry live ${m.tone} ${ev.running ? 'running' : ''}" data-live-row="${ev.live}">
+            <span class="chip-ico sm">${icon(m.icon)}</span>
+            <span class="entry-main">
+              <div class="entry-title"><b>${esc(m.label)}</b>
+                <span class="entry-dur" data-live="${ev.live}-elapsed">${dur(liveSeconds(ev, ctx, now))}</span>
+                <span class="entry-time"><span class="pill">${ev.running ? 'now' : 'paused'}</span></span></div>
+              <div class="entry-sub">${esc(liveSub(ev))}</div>
+            </span>
+          </button>`;
+          continue;
+        }
         const secs = ev.type === T.FEED ? feedSeconds(ev) : ev.type === T.SLEEP && ev.end ? sleepSeconds(ev) : 0;
         html += `<button class="entry ${m.tone}" data-id="${esc(ev.id)}">
           <span class="chip-ico sm">${icon(m.icon)}</span>
@@ -85,13 +124,26 @@ export async function render(root, ctx) {
     if (events.length > shown) {
       html += `<div class="row"><button class="btn wide" data-more="1">Show ${Math.min(PAGE, events.length - shown)} more · ${events.length - shown} left</button></div>`;
     } else {
-      html += `<p class="muted" style="text-align:center;padding:14px">${events.length} entr${events.length === 1 ? 'y' : 'ies'}</p>`;
+      const n = events.filter(e => !e.live).length;
+      html += `<p class="muted" style="text-align:center;padding:14px">${n} entr${n === 1 ? 'y' : 'ies'}</p>`;
     }
   }
 
   root.innerHTML = html;
 
+  // keep the running row's duration moving without re-rendering the list
+  ctx.onTick(() => {
+    const now = Date.now();
+    for (const row of liveRows(ctx)) {
+      const el = root.querySelector(`[data-live="${row.live}-elapsed"]`);
+      if (el) el.textContent = dur(liveSeconds(row, ctx, now));
+    }
+  });
+
   root.addEventListener('click', async e => {
+    const live = e.target.closest('[data-live-row]');
+    if (live) return ctx.go('home', 'prev');
+
     const chip = e.target.closest('[data-filter]');
     if (chip) { filter = chip.dataset.filter; shown = PAGE; return ctx.refresh(); }
 
