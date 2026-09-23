@@ -5,6 +5,7 @@ import { T } from '../model.js';
 import { esc, icon, toast, confirm, sheet, shareOrDownload, squarePhoto } from '../ui.js';
 import { toDateInput, ageFrom } from '../format.js';
 import { syncCard, wireSync } from './sync-ui.js';
+import { push, status as pushStatus, enable as pushEnable, disable as pushDisable, getToken, setToken } from '../push.js';
 import { sync, pushNow } from '../sync.js';
 
 function babiesCard(ctx, v) {
@@ -96,6 +97,30 @@ function dataCard(ctx, v) {
   </section>`;
 }
 
+function notifyCard(ctx, v) {
+  const st = v.push;
+  const line = !push.supported ? 'Not available in this browser.'
+    : !push.standalone ? 'Add the app to your Home Screen first — iOS only delivers notifications to installed apps.'
+    : st.state === 'on' ? 'On. This phone is told when the other one starts or ends a sleep.'
+    : st.state === 'denied' ? 'Blocked in iOS Settings → Notifications → Witte Baby.'
+    : 'Off.';
+  return `
+  <section class="card tone-sleep">
+    <div class="card-head"><span class="chip-ico">${icon('i-sleep')}</span><span class="card-title">Notifications</span>
+      <span class="meta">${st.state === 'on' ? '<span class="pill">on</span>' : 'this phone'}</span></div>
+    <p class="sub">${esc(line)}</p>
+    <div class="row">
+      ${st.state === 'on'
+        ? `<button class="btn ghost wide" data-act="push-off">Turn off on this phone</button>`
+        : `<button class="btn tone wide" data-act="push-on" ${push.supported && push.standalone ? '' : 'disabled'}>${icon('i-check', 'sm')}Notify me on this phone</button>`}
+    </div>
+    <label class="field" style="margin-top:14px"><span>GitHub token <span class="muted">(lets this phone send; stays on this phone)</span></span>
+      <input name="ghtoken" type="password" autocomplete="off" value="${esc(v.token || '')}" placeholder="github_pat_…"></label>
+    <div class="row"><button class="btn soft" data-act="save-token">${icon('i-check', 'sm')}Save token</button>
+      <button class="btn ghost" data-act="test-push" ${v.token ? '' : 'disabled'}>Send a test</button></div>
+  </section>`;
+}
+
 function appCard(ctx, v) {
   return `
   <section class="card tone-neutral">
@@ -112,9 +137,11 @@ export async function render(root, ctx) {
     lastImport: await db.metaGet('lastImport', null),
     p: ctx.state.profile || {},
     u: ctx.state.units,
+    push: await pushStatus(),
+    token: await getToken(),
   };
 
-  root.innerHTML = [babiesCard, lookCard, unitsCard, dataCard, () => syncCard(), appCard]
+  root.innerHTML = [babiesCard, lookCard, unitsCard, dataCard, () => syncCard(), notifyCard, appCard]
     .map(f => f(ctx, view)).join('');
 
   wireSync(root, ctx);
@@ -227,6 +254,23 @@ export async function render(root, ctx) {
         const on = b.dataset.look === ctx.look;
         b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on));
       });
+    }
+
+    if (act === 'push-on') {
+      try { await pushEnable(ctx.state.caregiver); toast('Notifications on'); ctx.refresh(); }
+      catch (err) { console.error(err); toast(err.message || 'Could not turn on notifications'); }
+    }
+    if (act === 'push-off') {
+      await pushDisable(); toast('Notifications off'); ctx.refresh();
+    }
+    if (act === 'save-token') {
+      await setToken(root.querySelector('[name=ghtoken]').value);
+      toast('Token saved on this phone'); ctx.refresh();
+    }
+    if (act === 'test-push') {
+      const { send } = await import('../push.js');
+      const r = await send('test', { baby: ctx.state.profile?.name, text: `Test from ${ctx.state.caregiver || 'the other phone'}` });
+      toast(r.ok ? 'Sent — the other phone should buzz in ~20s' : r.error || 'Not sent');
     }
 
     if (act === 'remove-photo') {

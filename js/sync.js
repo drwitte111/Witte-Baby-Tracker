@@ -122,6 +122,11 @@ export async function spaceLabel() {
 }
 
 export function isBaked() { return !!baked?.firebaseConfig; }
+
+/** Firestore SDK + store for the few things outside the engine (push subscriptions). */
+export function firestore() {
+  return sdk && store ? { ...sdk.fs, store } : null;
+}
 export function needsSignIn() { return requireSignIn; }
 
 export async function setConfig(config) {

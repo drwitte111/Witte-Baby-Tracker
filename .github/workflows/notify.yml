@@ -1,0 +1,31 @@
+# Sends a push notification to the *other* phone when a sleep starts or ends.
+# The app triggers this with a repository_dispatch; the phone's own subscription
+# is skipped. Needs one repository secret: VAPID_PRIVATE_KEY.
+name: Notify the other phone
+
+on:
+  repository_dispatch:
+    types: [notify]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: notify-${{ github.event.client_payload.kind }}-${{ github.event.client_payload.at }}
+  cancel-in-progress: false
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-save --silent web-push@3
+      - name: Send
+        env:
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          PAYLOAD: ${{ toJSON(github.event.client_payload) }}
+        run: node tools/send-push.mjs "$PAYLOAD"

@@ -124,6 +124,34 @@ family when it is on (it says which).
 
 Personal exports are git-ignored; don't commit them.
 
+## Notifications (sleep start / end)
+
+When one phone starts or ends a sleep timer, the other phone gets a push notification. Web
+push on iOS only works for Home Screen apps and only when a server sends it, so the sender is
+a GitHub Action: the phone triggers `.github/workflows/notify.yml`, which reads the other
+phone's subscription from `families/witte/push/` in Firestore and pushes to it with
+`tools/send-push.mjs`. Public repos get unlimited Actions minutes; expect 10–30 s from tap
+to buzz.
+
+### One-time setup
+
+1. **Repository secret** — Settings → Secrets and variables → Actions → New repository secret:
+   name `VAPID_PRIVATE_KEY`, value: the private key that pairs with `VAPID_PUBLIC_KEY` in
+   `assets/firebase-config.js` (generate a pair with `npx web-push generate-vapid-keys` if you
+   ever need a new one; update both halves together).
+2. **GitHub token, once per phone** — github.com → Settings → Developer settings →
+   Fine-grained tokens → Generate: repository access *only this repository*, permission
+   **Contents: Read and write** (that is what `repository_dispatch` requires), expiry up to a
+   year. Paste it into **More → Notifications → GitHub token** on each phone. It stays on the
+   phone — it is never synced and never in the repo.
+3. **Turn on receiving, once per phone** — More → Notifications → **Notify me on this phone**
+   (the app must be installed on the Home Screen). Allow when iOS asks.
+
+**Send a test** on one phone should buzz the other within about 20 seconds. The workflow run
+under the repo's Actions tab shows what happened if it does not.
+
+Only sleep start and end notify for now. A phone never notifies itself.
+
 ## On iPhone
 
 The app is tuned for iPhone 16 Pro on iOS 26, and degrades cleanly elsewhere.

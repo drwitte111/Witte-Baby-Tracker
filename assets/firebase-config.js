@@ -35,3 +35,9 @@ export const SPACE_NAME = 'Witte family';
  * email/password accounts with invite codes; the code for that is still here.
  */
 export const REQUIRE_SIGN_IN = false;
+
+/**
+ * Public half of the web-push signing key. The private half is a GitHub
+ * repository secret (VAPID_PRIVATE_KEY) that the notify workflow uses.
+ */
+export const VAPID_PUBLIC_KEY = 'BJ3-sB3PueLvdaYbgbVC9UsJirpuq-np2n-y125u2mC-8ylwjJi4n7ERAlpxpnOZlQvNFxigfzVN7Nbp-RWsrzc';

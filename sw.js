@@ -1,7 +1,7 @@
 // Network-first for everything the app is made of, cache as the offline fallback.
 // Cache-first looked faster but meant every deploy left phones on a mix of old
 // and new files until the second launch — with a module app that is a broken app.
-const CACHE = 'witte-baby-v5';
+const CACHE = 'witte-baby-v6';
 const SHELL = [
   './', './index.html', './assets/styles.css', './assets/icon.svg',
   './assets/icon-180.png', './assets/icon-192.png', './assets/firebase-config.js',
@@ -35,4 +35,26 @@ self.addEventListener('fetch', e => {
       })
       .catch(() => caches.match(request).then(hit => hit || caches.match('./index.html')))
   );
+});
+
+// ---- push notifications (sent by the notify workflow for the other phone) ----
+self.addEventListener('push', e => {
+  let data = {};
+  try { data = e.data ? e.data.json() : {}; } catch { data = { title: 'Witte Baby', body: e.data?.text() || '' }; }
+  e.waitUntil(self.registration.showNotification(data.title || 'Witte Baby', {
+    body: data.body || '',
+    tag: data.kind || 'witte-baby',          // a newer sleep update replaces the older one
+    renotify: true,
+    icon: './assets/icon-192.png',
+    badge: './assets/icon-192.png',
+    data: { url: './' },
+  }));
+});
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+    const open = list.find(c => 'focus' in c);
+    return open ? open.focus() : self.clients.openWindow('./');
+  }));
 });
