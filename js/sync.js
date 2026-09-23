@@ -210,6 +210,21 @@ export async function init() {
     const [host, authPort, fsPort] = (emulator || '').split(':');
     if (emulator) F.connectFirestoreEmulator(store, host, Number(fsPort));
 
+    // A different project than last time (e.g. the app moved to a fresh one):
+    // forget what was synced with the old project so this phone uploads what
+    // it holds and pulls the rest, and republishes its push subscription.
+    const projectId = config.projectId || '';
+    const known = await db.metaGet('syncProject', null);
+    if (known === null) await db.metaSet('syncProject', projectId);   // first run after this update: adopt, no re-sync
+    else if (known !== projectId) {
+      await db.metaSet('syncWatermark', 0);
+      await db.metaSet('uploadedTo', null);
+      await db.metaSet('spaceDocWritten', null);
+      await db.metaSet('pushPublished', '');
+      await db.metaSet('syncProject', projectId);
+      debug('project changed; this phone will re-sync from scratch');
+    }
+
     if (!requireSignIn) { await attachSpace(); return; }
 
     // Per-caregiver accounts: the whole flow lives in sync-accounts.js and is
