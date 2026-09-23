@@ -25,9 +25,11 @@ function babiesCard(ctx, v) {
     ${v.p.id ? `<p class="sub" style="margin-top:12px"><b>${esc(v.p.name || 'Baby')}</b> · edit</p>
     <div class="photo-row">
       ${avatarHtml(v.p, 'lg')}
-      <label class="btn soft">${icon('i-plus', 'sm')}${v.p.photo ? 'Change' : 'Add photo'}
-        <input type="file" accept="image/*" id="baby-photo" style="display:none"></label>
-      ${v.p.photo ? `<button class="btn ghost" data-act="frame-photo">Adjust</button><button class="btn ghost" data-act="remove-photo">Remove</button>` : ''}
+      <div class="photo-actions">
+        <label class="chip on">${icon('i-plus')}${v.p.photo ? 'Change' : 'Add photo'}
+          <input type="file" accept="image/*" id="baby-photo" style="display:none"></label>
+        ${v.p.photo ? `<button class="chip" data-act="frame-photo">${icon('i-switch')}Adjust</button><button class="chip" data-act="remove-photo">${icon('i-close')}Remove</button>` : ''}
+      </div>
     </div>
     <label class="field"><span>Name</span><input name="name" value="${esc(v.p.name || '')}" placeholder="Baby"></label>
     <label class="field"><span>Birth date</span><input type="date" name="birth" value="${v.p.birth ? toDateInput(v.p.birth) : ''}"></label>` : ''}
