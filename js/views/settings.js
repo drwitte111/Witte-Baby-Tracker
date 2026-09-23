@@ -6,7 +6,7 @@ import { esc, icon, toast, confirm, sheet, shareOrDownload, shrinkPhoto } from '
 import { avatarHtml, bindFraming, frameStyle, saneFrame, DEFAULT_ZOOM } from '../avatar.js';
 import { toDateInput, ageFrom } from '../format.js';
 import { syncCard, wireSync } from './sync-ui.js';
-import { push, status as pushStatus, enable as pushEnable, disable as pushDisable, getToken, setToken, explain as explainSend, receiverCount } from '../push.js';
+import { push, status as pushStatus, enable as pushEnable, disable as pushDisable, ensurePublished, getToken, setToken, explain as explainSend, receiverCount } from '../push.js';
 import { sync, pushNow } from '../sync.js';
 
 function babiesCard(ctx, v) {
@@ -113,7 +113,7 @@ function notifyCard(ctx, v) {
       <span class="meta">${st.state === 'on' ? '<span class="pill">on</span>' : 'this phone'}</span></div>
     <p class="sub">${esc(line)}</p>
     <p class="sub">
-      <b>Receive:</b> ${st.state === 'on' ? 'this phone is subscribed' : 'this phone is not subscribed'} ·
+      <b>Receive:</b> ${st.state === 'on' ? (st.published ? 'this phone is subscribed' : 'subscribed here, but not yet shared with the sender — retrying') : 'this phone is not subscribed'} ·
       ${v.receivers == null ? 'subscriber count unavailable' : `${v.receivers} phone${v.receivers === 1 ? '' : 's'} subscribed in total`}<br>
       <b>Send:</b> ${v.token ? 'token saved on this phone — sleep changes here notify the others' : 'no token on this phone — sleep changes here notify nobody'}
     </p>
@@ -145,7 +145,7 @@ export async function render(root, ctx) {
     lastImport: await db.metaGet('lastImport', null),
     p: ctx.state.profile || {},
     u: ctx.state.units,
-    push: await pushStatus(),
+    push: (await ensurePublished(ctx.state.caregiver), await pushStatus()),
     token: await getToken(),
     receivers: await receiverCount(),
   };

@@ -1,6 +1,9 @@
 # Tests
 
 Both suites run against the Firebase emulators — no real project, no cost, no data leaves the machine.
+The app enforces this: served from `localhost`/`127.0.0.1` without the `firebaseEmulator`
+override it starts with sync **off**, so a browser test can never spend the real project's
+free-tier quota (each cold load of the real project costs one read per stored event).
 
 ## Setup
 
