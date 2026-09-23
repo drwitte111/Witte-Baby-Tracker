@@ -2,7 +2,8 @@
 import { db } from '../db.js';
 import { fromNaraCsv, toNaraCsv } from '../csv.js';
 import { T } from '../model.js';
-import { esc, icon, toast, confirm, sheet, shareOrDownload, squarePhoto } from '../ui.js';
+import { esc, icon, toast, confirm, sheet, shareOrDownload, shrinkPhoto } from '../ui.js';
+import { avatarHtml, bindFraming, frameStyle, saneFrame, DEFAULT_ZOOM } from '../avatar.js';
 import { toDateInput, ageFrom } from '../format.js';
 import { syncCard, wireSync } from './sync-ui.js';
 import { push, status as pushStatus, enable as pushEnable, disable as pushDisable, getToken, setToken } from '../push.js';
@@ -15,7 +16,7 @@ function babiesCard(ctx, v) {
       <span class="meta">${ctx.state.profiles.length === 1 ? 'tracking' : `${ctx.state.profiles.length} on this family`}</span></div>
     <div class="baby-list">
       ${ctx.state.profiles.map(b => `<button class="baby ${b.id === ctx.state.current ? 'on' : ''}" data-act="select-baby" data-id="${esc(b.id)}">
-        <span class="avatar sm">${b.photo ? `<img src="${b.photo}" alt="">` : esc((b.name || '•').trim()[0].toUpperCase())}</span>
+        ${avatarHtml(b, 'sm')}
         <span class="baby-main"><b>${esc(b.name || 'Baby')}</b>
           <span class="muted">${esc(ageFrom(b.birth) || 'birth date not set')} · ${v.counts[b.id] || 0} entries</span></span>
         ${b.id === ctx.state.current ? `<span class="pill">showing</span>` : ''}
@@ -23,10 +24,10 @@ function babiesCard(ctx, v) {
     </div>
     ${v.p.id ? `<p class="sub" style="margin-top:12px"><b>${esc(v.p.name || 'Baby')}</b> · edit</p>
     <div class="photo-row">
-      <span class="avatar lg">${v.p.photo ? `<img src="${v.p.photo}" alt="">` : esc((v.p.name || '•').trim()[0].toUpperCase())}</span>
-      <label class="btn soft">${icon('i-plus', 'sm')}${v.p.photo ? 'Change photo' : 'Add photo'}
+      ${avatarHtml(v.p, 'lg')}
+      <label class="btn soft">${icon('i-plus', 'sm')}${v.p.photo ? 'Change' : 'Add photo'}
         <input type="file" accept="image/*" id="baby-photo" style="display:none"></label>
-      ${v.p.photo ? `<button class="btn ghost" data-act="remove-photo">Remove</button>` : ''}
+      ${v.p.photo ? `<button class="btn ghost" data-act="frame-photo">Adjust</button><button class="btn ghost" data-act="remove-photo">Remove</button>` : ''}
     </div>
     <label class="field"><span>Name</span><input name="name" value="${esc(v.p.name || '')}" placeholder="Baby"></label>
     <label class="field"><span>Birth date</span><input type="date" name="birth" value="${v.p.birth ? toDateInput(v.p.birth) : ''}"></label>` : ''}
@@ -150,10 +151,8 @@ export async function render(root, ctx) {
     const file = e.target.files?.[0];
     if (!file || !ctx.state.profile) return;
     try {
-      const photo = await squarePhoto(file);
-      await ctx.saveProfile({ ...ctx.state.profile, photo });
-      toast('Photo saved');
-      ctx.refresh();
+      const { url, aspect } = await shrinkPhoto(file);
+      await framePhoto(ctx, url, { ox: 0, oy: 0, zoom: DEFAULT_ZOOM, aspect });
     } catch (err) {
       console.error(err);
       toast('Could not read that image');
@@ -273,6 +272,10 @@ export async function render(root, ctx) {
       toast(r.ok ? 'Sent — the other phone should buzz in ~20s' : r.error || 'Not sent');
     }
 
+    if (act === 'frame-photo' && ctx.state.profile?.photo) {
+      await framePhoto(ctx, ctx.state.profile.photo, ctx.state.profile.frame);
+    }
+
     if (act === 'remove-photo') {
       const { photo, ...rest } = ctx.state.profile;
       await ctx.saveProfile({ ...rest, photo: null });
@@ -330,4 +333,39 @@ export async function render(root, ctx) {
       ctx.refresh();
     }
   });
+}
+
+
+/**
+ * Framing sheet: drag the photo, zoom with the slider, Fit / Reset, Save.
+ * Saves photo + frame on the current baby.
+ */
+async function framePhoto(ctx, photo, frame) {
+  const f = saneFrame(frame, frame?.aspect);
+  if (!f.aspect) {
+    // aspect unknown (older square photo): measure it
+    f.aspect = await new Promise(res => { const i = new Image(); i.onload = () => res(i.width / i.height || 1); i.onerror = () => res(1); i.src = photo; });
+  }
+  const result = await sheet({
+    title: 'Frame the photo',
+    body: `<div class="framer">
+      <div class="frame-circle" id="frame-circle"><img src="${photo}" alt="" draggable="false" id="frame-img" style="${frameStyle(f)}"></div>
+      <div class="frame-zoom"><span class="muted">Zoom</span>
+        <input type="range" id="frame-zoom" min="0.4" max="2.5" step="0.01" value="${f.zoom}">
+        <button type="button" class="chip" data-frame="fit">Fit</button>
+        <button type="button" class="chip" data-frame="reset">Reset</button></div>
+      <p class="muted" style="text-align:center">Drag the photo to frame it</p>
+    </div>`,
+    onMount: root => {
+      const img = root.querySelector('#frame-img');
+      const ctl = bindFraming(root.querySelector('#frame-circle'), root.querySelector('#frame-zoom'), f, () => { img.style.cssText = frameStyle(f); });
+      root.querySelector('[data-frame="fit"]').addEventListener('click', ctl.fit);
+      root.querySelector('[data-frame="reset"]').addEventListener('click', ctl.reset);
+    },
+    actions: [{ label: 'Save', cls: 'primary', onClick: () => ({ ...f }) }],
+  });
+  if (!result) return;
+  await ctx.saveProfile({ ...ctx.state.profile, photo, frame: result });
+  toast('Photo saved');
+  ctx.refresh();
 }
