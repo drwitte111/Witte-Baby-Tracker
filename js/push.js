@@ -39,7 +39,8 @@ export async function status() {
   if (!push.supported) return { state: 'unsupported' };
   const reg = await navigator.serviceWorker.getRegistration();
   const sub = await reg?.pushManager.getSubscription();
-  return { state: sub ? 'on' : Notification.permission === 'denied' ? 'denied' : 'off', sub };
+  const published = !!sub && await db.metaGet('pushPublished', '') === sub.endpoint;
+  return { state: sub ? 'on' : Notification.permission === 'denied' ? 'denied' : 'off', sub, published };
 }
 
 /** Ask permission, subscribe, and publish the subscription. Must run from a tap. */
@@ -50,12 +51,33 @@ export async function enable(caregiver) {
   if (perm !== 'granted') throw new Error('Notifications were not allowed');
   const reg = await navigator.serviceWorker.ready;
   const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(VAPID_PUBLIC_KEY) });
-  const id = await deviceId();
+  await publish(sub, caregiver);
+  return sub;
+}
+
+/** Store the subscription where the sender can find it, and remember that it landed. */
+async function publish(sub, caregiver) {
+  const { SPACE } = await conf();
   const F = (await import('./sync.js')).firestore();
   if (!F) throw new Error('Sync is not connected');
-  await F.setDoc(F.doc(F.store, 'families', SPACE || 'witte', 'push', id),
+  await F.setDoc(F.doc(F.store, 'families', SPACE || 'witte', 'push', await deviceId()),
     { sub: JSON.stringify(sub.toJSON()), device: caregiver || '', updated: Date.now() });
-  return sub;
+  await db.metaSet('pushPublished', sub.endpoint);
+}
+
+/**
+ * Self-heal: a subscription that exists on this phone but never reached
+ * Firestore (the write failed, or the app was closed mid-way) is published
+ * again. Costs nothing when it already landed. Safe to call any time sync is live.
+ */
+export async function ensurePublished(caregiver) {
+  try {
+    const { sub } = await status();
+    if (!sub) return false;
+    if (await db.metaGet('pushPublished', '') === sub.endpoint) return true;
+    await publish(sub, caregiver);
+    return true;
+  } catch (err) { console.warn('push publish pending:', err.message); return false; }
 }
 
 export async function disable() {
@@ -63,6 +85,7 @@ export async function disable() {
   const reg = await navigator.serviceWorker.getRegistration();
   const sub = await reg?.pushManager.getSubscription();
   await sub?.unsubscribe();
+  await db.metaSet('pushPublished', '');
   const F = (await import('./sync.js')).firestore();
   if (F) await F.deleteDoc(F.doc(F.store, 'families', SPACE || 'witte', 'push', await deviceId())).catch(() => {});
 }

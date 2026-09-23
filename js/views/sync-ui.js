@@ -44,7 +44,9 @@ export function syncCard() {
 
   switch (sync.state) {
     case 'off':
-      body = isBaked()
+      body = sync.error && sync.error.startsWith('Local page')
+        ? `<p class="sub">${esc(sync.error)}</p>`
+        : isBaked()
         ? `<p class="sub">A project is configured but did not load. Check the connection and retry.</p>
            <div class="row"><button class="btn primary wide" data-sync="retry">Retry</button></div>`
         : `<p class="sub">Both phones see the same data once this points at a Firebase project.

@@ -34,7 +34,11 @@ const SYNCED_META = ['profiles', 'current', 'units', 'profile', 'activeSleep', '
  */
 export const QUOTA = { reads: 50000, writes: 20000 };
 const cap = key => Number(localStorage.getItem(`sync${key}Cap`)) || (key === 'Write' ? 9000 : 22000);
-const usageKey = () => { const d = new Date(); return `usage:${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
+// Firestore's daily quota resets at midnight *Pacific*, so the budget day
+// follows that clock rather than the phone's.
+const QUOTA_TZ = 'America/Los_Angeles';
+const pacificDay = (d = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: QUOTA_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+const usageKey = () => `usage:${pacificDay()}`;
 let usage = { reads: 0, writes: 0, day: usageKey() };
 
 async function loadUsage() {
@@ -52,7 +56,14 @@ const writesLeft = () => Math.max(0, cap('Write') - usage.writes);
 const readsLeft = () => Math.max(0, cap('Read') - usage.reads);
 export function budget() { return { ...usage, writeCap: cap('Write'), readCap: cap('Read') }; }
 
-function msToMidnight() { const d = new Date(); d.setHours(24, 0, 5, 0); return d.getTime() - Date.now(); }
+/** Milliseconds until the quota day rolls over (midnight Pacific), plus a few seconds of slack. */
+export function msToMidnight(now = Date.now()) {
+  const today = pacificDay(new Date(now));
+  let t = now + 60_000;
+  while (pacificDay(new Date(t)) === today) t += 60_000;     // walk to the first minute of the next Pacific day
+  const d = new Date(t); d.setUTCSeconds(5, 0);
+  return d.getTime() - now;
+}
 let resumeTimer = null;
 function resumeAfterMidnight() {
   clearTimeout(resumeTimer);
@@ -175,9 +186,18 @@ async function loadSdk() {
 
 /* ---------------- lifecycle ---------------- */
 
+/** True on a local dev page (tests, http-server) that has not opted into the emulator. */
+export function localWithoutEmulator() {
+  const h = location.hostname;
+  return (h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h === '') && !localStorage.getItem('firebaseEmulator');
+}
+
 export async function init() {
   const config = await getConfig();
   if (!config) { announce({ state: 'off' }); return; }
+  // A test page must never spend the real project's free-tier quota: without
+  // the emulator flag a local page runs with sync off.
+  if (localWithoutEmulator()) { announce({ state: 'off', error: 'Local page: sync is off (set firebaseEmulator to use the emulator)' }); return; }
   announce({ state: 'loading', error: '' });
   try {
     const { app: A, auth: U, fs: F } = await loadSdk();

@@ -2,7 +2,7 @@
 import { db } from './db.js';
 import { initTooltips, toast } from './ui.js';
 import { ageFrom } from './format.js';
-import { init as initSync, attachLocalPusher, markMetaDirty } from './sync.js';
+import { init as initSync, attachLocalPusher, markMetaDirty, onSyncChange } from './sync.js';
 import { avatarInner } from './avatar.js';
 
 import * as home from './views/home.js';
@@ -362,6 +362,14 @@ async function boot() {
     }, 250);
   });
   attachLocalPusher();
+  // Once sync is live, make sure this phone's push subscription reached Firestore
+  // (a write that failed earlier, e.g. over quota, is retried here at no cost).
+  let pushChecked = false;
+  onSyncChange(s => {
+    if (s.state !== 'live' || pushChecked) return;
+    pushChecked = true;
+    import('./push.js').then(m => m.ensurePublished(state.caregiver)).catch(() => {});
+  });
   initSync();
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
