@@ -6,7 +6,7 @@ import { esc, icon, toast, confirm, sheet, shareOrDownload, shrinkPhoto } from '
 import { avatarHtml, bindFraming, frameStyle, saneFrame, DEFAULT_ZOOM } from '../avatar.js';
 import { toDateInput, ageFrom } from '../format.js';
 import { syncCard, wireSync } from './sync-ui.js';
-import { push, status as pushStatus, enable as pushEnable, disable as pushDisable, getToken, setToken } from '../push.js';
+import { push, status as pushStatus, enable as pushEnable, disable as pushDisable, getToken, setToken, explain as explainSend, receiverCount } from '../push.js';
 import { sync, pushNow } from '../sync.js';
 
 function babiesCard(ctx, v) {
@@ -112,6 +112,11 @@ function notifyCard(ctx, v) {
     <div class="card-head"><span class="chip-ico">${icon('i-sleep')}</span><span class="card-title">Notifications</span>
       <span class="meta">${st.state === 'on' ? '<span class="pill">on</span>' : 'this phone'}</span></div>
     <p class="sub">${esc(line)}</p>
+    <p class="sub">
+      <b>Receive:</b> ${st.state === 'on' ? 'this phone is subscribed' : 'this phone is not subscribed'} ·
+      ${v.receivers == null ? 'subscriber count unavailable' : `${v.receivers} phone${v.receivers === 1 ? '' : 's'} subscribed in total`}<br>
+      <b>Send:</b> ${v.token ? 'token saved on this phone — sleep changes here notify the others' : 'no token on this phone — sleep changes here notify nobody'}
+    </p>
     <div class="row">
       ${st.state === 'on'
         ? `<button class="btn ghost wide" data-act="push-off">Turn off on this phone</button>`
@@ -142,6 +147,7 @@ export async function render(root, ctx) {
     u: ctx.state.units,
     push: await pushStatus(),
     token: await getToken(),
+    receivers: await receiverCount(),
   };
 
   root.innerHTML = [babiesCard, lookCard, unitsCard, dataCard, () => syncCard(), notifyCard, appCard]
@@ -271,7 +277,7 @@ export async function render(root, ctx) {
     if (act === 'test-push') {
       const { send } = await import('../push.js');
       const r = await send('test', { baby: ctx.state.profile?.name, text: `Test from ${ctx.state.caregiver || 'the other phone'}` });
-      toast(r.ok ? 'Sent — the other phone should buzz in ~20s' : r.error || 'Not sent');
+      toast(r.ok ? 'Sent — the other phone should buzz in ~20s. If not, check the repo\'s Actions tab.' : explainSend(r), 5000);
     }
 
     if (act === 'frame-photo' && ctx.state.profile?.photo) {
