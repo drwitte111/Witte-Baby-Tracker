@@ -7,6 +7,7 @@ import { avatarHtml, bindFraming, frameStyle, saneFrame, DEFAULT_ZOOM } from '..
 import { toDateInput, ageFrom } from '../format.js';
 import { syncCard, wireSync } from './sync-ui.js';
 import { push, status as pushStatus, enable as pushEnable, disable as pushDisable, ensurePublished, getToken, setToken, explain as explainSend, receiverCount } from '../push.js';
+import { badgeSupported, badgeEnabled, setBadgeEnabled, syncBadge } from '../badge.js';
 import { sync, pushNow } from '../sync.js';
 
 function babiesCard(ctx, v) {
@@ -122,6 +123,10 @@ function notifyCard(ctx, v) {
         ? `<button class="btn ghost wide" data-act="push-off">Turn off on this phone</button>`
         : `<button class="btn tone wide" data-act="push-on" ${push.supported && push.standalone ? '' : 'disabled'}>${icon('i-check', 'sm')}Notify me on this phone</button>`}
     </div>
+    <label class="switch-row" style="margin-top:14px">
+      <span><b>Badge the icon while asleep</b><br><span class="muted">A red badge on the Home Screen icon until she wakes, on both phones.${badgeSupported ? '' : ' Needs the installed app.'}</span></span>
+      <input type="checkbox" name="badge" ${v.badge ? 'checked' : ''} ${badgeSupported ? '' : 'disabled'}>
+    </label>
     <label class="field" style="margin-top:14px"><span>GitHub token <span class="muted">(lets this phone send; stays on this phone)</span></span>
       <input name="ghtoken" type="password" autocomplete="off" value="${esc(v.token || '')}" placeholder="github_pat_…"></label>
     <div class="row"><button class="btn soft" data-act="save-token">${icon('i-check', 'sm')}Save token</button>
@@ -147,6 +152,7 @@ export async function render(root, ctx) {
     u: ctx.state.units,
     push: (await ensurePublished(ctx.state.caregiver), await pushStatus()),
     token: await getToken(),
+    badge: await badgeEnabled(),
     receivers: await receiverCount(),
   };
 
@@ -235,6 +241,13 @@ export async function render(root, ctx) {
       await ctx.setUnits(units);
       toast('Units updated');
     }
+  });
+
+  root.addEventListener('change', async e => {
+    if (e.target.name !== 'badge') return;
+    await setBadgeEnabled(e.target.checked);
+    await syncBadge(ctx.state.activeSleep);
+    toast(e.target.checked ? 'Icon badge on while asleep' : 'Icon badge off');
   });
 
   root.addEventListener('click', async e => {

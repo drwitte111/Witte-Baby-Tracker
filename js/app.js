@@ -3,6 +3,7 @@ import { db } from './db.js';
 import { initTooltips, toast } from './ui.js';
 import { ageFrom } from './format.js';
 import { init as initSync, attachLocalPusher, markMetaDirty, onSyncChange } from './sync.js';
+import { syncBadge } from './badge.js';
 import { avatarInner } from './avatar.js';
 
 import * as home from './views/home.js';
@@ -41,7 +42,7 @@ const ctx = {
   onTick(fn) { tickHandlers.push(fn); },
 
   async setActiveFeed(v) { state.activeFeed = v; await db.metaSet('activeFeed', v); await markMetaDirty('activeFeed'); syncWakeLock(); },
-  async setActiveSleep(v) { state.activeSleep = v; await db.metaSet('activeSleep', v); await markMetaDirty('activeSleep'); },
+  async setActiveSleep(v) { state.activeSleep = v; await db.metaSet('activeSleep', v); await markMetaDirty('activeSleep'); syncBadge(v); },
   /** Update (or add) one baby's record. */
   async saveProfile(p) {
     const list = state.profiles.slice();
@@ -320,6 +321,7 @@ async function reloadSharedState() {
   state.units = { ...DEFAULT_UNITS, ...units };
   state.activeFeed = activeFeed;
   state.activeSleep = activeSleep;
+  syncBadge(activeSleep);
   syncWakeLock();
   applyScope();
 }
@@ -346,6 +348,7 @@ async function boot() {
   state.caregiver = caregiver;
   state.activeFeed = activeFeed;
   state.activeSleep = activeSleep;
+  syncBadge(activeSleep);
 
   applyScope();
 
