@@ -307,6 +307,21 @@ body.kb-open .tabbar { bottom: -120px; pointer-events: none; }
 .entry.live .entry-dur { font-variant-numeric: tabular-nums; }
 .entry.live .pill { font-size: 11px; padding: 2px 8px; }
 
+/* switch row: label text left, native toggle right */
+.switch-row { display: flex; align-items: center; gap: 12px; }
+.switch-row > span { flex: 1; min-width: 0; font-size: 14px; }
+.switch-row input[type=checkbox] {
+  appearance: none; -webkit-appearance: none; width: 51px; height: 31px; min-height: 0; flex: none; margin: 0; padding: 0;
+  border-radius: 999px; border: 0; background: var(--surface-3); position: relative; transition: background .2s;
+}
+.switch-row input[type=checkbox]::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%;
+  background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.25); transition: transform .2s var(--ease);
+}
+.switch-row input[type=checkbox]:checked { background: var(--accent); }
+.switch-row input[type=checkbox]:checked::after { transform: translateX(20px); }
+.switch-row input[type=checkbox]:disabled { opacity: .5; }
+
 /* ---- forms / sheet -------------------------------------------------- */
 .sheet-backdrop {
   position: fixed; inset: 0 0 var(--kb) 0; background: rgba(0,0,0,.42); z-index: 40;
