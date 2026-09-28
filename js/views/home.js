@@ -235,6 +235,7 @@ function wire(root, ctx) {
         const left = Math.round(s.leftSec || 0), right = Math.round(s.rightSec || 0);
         if (left + right < 5) { toast('Too short to save — discard instead?'); return; }
         await db.put(makeEvent(T.FEED, {
+          ...(s.resume || {}),                                   // a resumed entry keeps its id
           start: s.start, leftSec: left, rightSec: right,
           beginSide: s.beginSide || (left && !right ? 'LEFT' : right && !left ? 'RIGHT' : s.side),
           endSide: s.side, caregiver: ctx.state.caregiver,
@@ -291,6 +292,7 @@ function wire(root, ctx) {
         const s = bankSleep(ctx.state.activeSleep, now);
         const durationSec = Math.round(s.elapsedSec);
         await db.put(makeEvent(T.SLEEP, {
+          ...(s.resume || {}),                                   // a resumed entry keeps its id
           start: s.start, end: now, durationSec,
           caregiver: ctx.state.caregiver,
         }));
