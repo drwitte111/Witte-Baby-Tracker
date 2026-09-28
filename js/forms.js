@@ -1,7 +1,7 @@
 // Add / edit sheets for the four tracked activities.
 import { sheet, confirm, esc, toast } from './ui.js';
 import { db } from './db.js';
-import { T, makeEvent, DIAPER_COLORS, DIAPER_TEXTURES, TYPE_META } from './model.js';
+import { T, makeEvent, sleepSeconds, DIAPER_COLORS, DIAPER_TEXTURES, TYPE_META } from './model.js';
 import { toLocalInput, fromLocalInput, gramsTo, toGrams, cmTo, toCm } from './format.js';
 
 const opt = (v, cur, label) => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(label ?? v)}</option>`;
@@ -156,9 +156,33 @@ export async function addEntry(type, ctx, prefill = {}) {
   return saved;
 }
 
-/** Edit sheet with delete. Returns 'saved' | 'deleted' | null. */
+/**
+ * Put a finished feed or sleep back on the timer, as if it had been paused
+ * instead of ended. The entry leaves the Log while it runs and comes back
+ * under the same id when it ends again, so the other phone sees one entry.
+ */
+export async function resumeEntry(ev, ctx) {
+  const now = Date.now();
+  const keep = { id: ev.id, profileId: ev.profileId, profileKey: ev.profileKey, note: ev.note };
+  if (ev.type === T.FEED) {
+    if (ctx.state.activeFeed) { toast('A feed is already running'); return false; }
+    await ctx.setActiveFeed({
+      start: ev.start, side: ev.endSide || ev.beginSide || 'LEFT', beginSide: ev.beginSide || ev.endSide || 'LEFT',
+      leftSec: ev.leftSec || 0, rightSec: ev.rightSec || 0, running: true, sinceTick: now, resume: keep,
+    });
+  } else if (ev.type === T.SLEEP) {
+    if (ctx.state.activeSleep) { toast('A sleep is already running'); return false; }
+    await ctx.setActiveSleep({ start: ev.start, elapsedSec: sleepSeconds(ev), running: true, sinceTick: now, resume: keep });
+    import('./push.js').then(m => m.send('sleep-resume', { baby: ctx.state.profile?.name, by: ctx.state.caregiver })).catch(() => {});
+  } else return false;
+  await db.remove(ev.id);
+  return true;
+}
+
+/** Edit sheet with delete. Returns 'saved' | 'deleted' | 'resumed' | null. */
 export async function editEntry(ev, ctx) {
-  let deleted = false;
+  let deleted = false, resumed = false;
+  const resumable = ev.type === T.FEED || (ev.type === T.SLEEP && ev.end);
   const saved = await sheet({
     title: `Edit ${TYPE_META[ev.type]?.label.toLowerCase() || 'entry'}`,
     body: bodyFor(ev.type, ev, ctx.state.units),
@@ -172,6 +196,15 @@ export async function editEntry(ev, ctx) {
           return { ...ev, ...patch, updated: Date.now() };
         },
       },
+      ...(resumable ? [{
+        label: 'Resume', cls: 'soft',
+        onClick: async (_root, close) => {
+          if (!await resumeEntry(ev, ctx)) return false;
+          resumed = true;
+          close('resumed');
+          return false;
+        },
+      }] : []),
       {
         label: 'Delete', cls: 'danger',
         onClick: async (_root, close) => {
@@ -184,6 +217,7 @@ export async function editEntry(ev, ctx) {
       },
     ],
   });
+  if (resumed) { toast(ev.type === T.FEED ? 'Feed resumed' : 'Sleep resumed'); ctx.go('home', 'prev'); return 'resumed'; }
   if (deleted) { ctx.refresh(); toast('Deleted'); return 'deleted'; }
   if (saved && typeof saved === 'object') { await db.put(saved); ctx.refresh(); toast('Saved'); return 'saved'; }
   return null;

@@ -22,7 +22,7 @@ export function feedTotals(s, now = Date.now()) {
 /** Older sessions were just { start }; give them the full shape. */
 export function normSleep(s) {
   if (!s) return null;
-  return { start: s.start, elapsedSec: s.elapsedSec || 0, running: s.running !== false,
+  return { ...s, start: s.start, elapsedSec: s.elapsedSec || 0, running: s.running !== false,
            sinceTick: s.sinceTick || s.start };
 }
 
