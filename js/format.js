@@ -38,7 +38,7 @@ export function time(ms) {
 export function dateLong(ms) {
   const d = new Date(ms), today = new Date();
   const same = (a, b) => a.toDateString() === b.toDateString();
-  const yest = new Date(today.getTime() - DAY * 1000);
+  const yest = new Date(today); yest.setDate(yest.getDate() - 1);
   if (same(d, today)) return 'Today';
   if (same(d, yest)) return 'Yesterday';
   return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });

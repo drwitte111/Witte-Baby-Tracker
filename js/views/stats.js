@@ -13,10 +13,11 @@ const dateLabel = ms => new Date(ms).toLocaleDateString([], { month: 'numeric', 
 
 export async function render(root, ctx) {
   const now = Date.now();
-  const from = startOfDay(now) - (days - 1) * DAY * 1000;
+  const fromDate = new Date(startOfDay(now)); fromDate.setDate(fromDate.getDate() - (days - 1));   // real midnights, not 24h steps
+  const from = fromDate.getTime();
   const events = await db.range(from, now + 1);
   // Sleeps that began before the window can still cover its first night.
-  const earlier = await db.range(from - DAY * 1000, from);
+  const earlier = await db.range(from - 36 * 3600 * 1000, from);
   const liveSleep = ctx.state.activeSleep
     ? [{ type: T.SLEEP, id: 'live', start: ctx.state.activeSleep.start, end: null }]
     : [];
