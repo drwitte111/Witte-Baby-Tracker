@@ -52,6 +52,11 @@ export function dayKey(ms) {
 export function startOfDay(ms) {
   const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime();
 }
+/** Midnight that ends the local day containing ms. Never dayStart + 24h: a
+ *  daylight-saving day is 23 or 25 hours long. */
+export function endOfDay(ms) {
+  const d = new Date(ms); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + 1); return d.getTime();
+}
 
 // <input type="datetime-local"> round-trip, in local time.
 export function toLocalInput(ms) {
