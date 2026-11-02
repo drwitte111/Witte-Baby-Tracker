@@ -1,5 +1,5 @@
 // Activity model. One flat record shape per event, canonical units (g, cm, ml, seconds).
-import { DAY, startOfDay } from './format.js';
+import { DAY, startOfDay, endOfDay } from './format.js';
 
 export const T = {
   FEED:   'breastfeed',
@@ -133,8 +133,9 @@ export function sleepSecondsPerDay(sleeps, days, endMs = Date.now()) {
     let cursor = ev.start;
     while (cursor < end) {
       const dayStart = startOfDay(cursor);
-      const dayEnd = dayStart + DAY * 1000;
+      const dayEnd = endOfDay(cursor);
       const sliceEnd = Math.min(end, dayEnd);
+      if (sliceEnd <= cursor) break;                       // never spin, whatever the clock does
       const bucket = out.get(dayStart);
       if (bucket) {
         // Night = the 7pm–7am window; split the slice at those boundaries.
@@ -142,7 +143,7 @@ export function sleepSecondsPerDay(sleeps, days, endMs = Date.now()) {
         while (t < sliceEnd) {
           const h = new Date(t).getHours();
           const nextHour = new Date(t); nextHour.setMinutes(0, 0, 0); nextHour.setHours(h + 1);
-          const stop = Math.min(sliceEnd, nextHour.getTime());
+          const stop = Math.min(sliceEnd, Math.max(nextHour.getTime(), t + 1000));
           const sec = (stop - t) / 1000;
           if (h >= 19 || h < 7) bucket.night += sec; else bucket.day += sec;
           t = stop;

@@ -1,7 +1,7 @@
 // Stats: daily rhythm, sleep, feeds and diapers over a chosen window.
 import { db } from '../db.js';
 import { T, byDay, sleepSecondsPerDay, summarizeDay, feedSeconds, sleepSeconds } from '../model.js';
-import { DAY, startOfDay, dur, time, dateLong } from '../format.js';
+import { DAY, startOfDay, endOfDay, dur, time, dateLong } from '../format.js';
 import { esc, icon } from '../ui.js';
 import { barChart, stackedBarChart, rhythmChart, vizCard } from '../charts.js';
 
@@ -41,20 +41,21 @@ export async function render(root, ctx) {
 
   /* ---- rhythm: sleep blocks + feed ticks per day ---- */
   const rhythmDays = buckets.map(b => {
-    const dayStart = b.dayStart, dayEnd = dayStart + DAY * 1000;
+    const dayStart = b.dayStart, dayEnd = endOfDay(dayStart);
     const blocks = [];
     for (const s of sleeps) {
       const sEnd = s.end || now;                       // an unfinished sleep runs to "now"
       if (s.start >= dayEnd || sEnd <= dayStart) continue;
       const from0 = Math.max(s.start, dayStart), to0 = Math.min(sEnd, dayEnd);
+      const hours = ms => Math.min(24, (ms - dayStart) / (DAY * 1000) * 24);   // a 25-hour day still draws as 24
       blocks.push({
-        from: (from0 - dayStart) / (DAY * 1000) * 24,
-        to: (to0 - dayStart) / (DAY * 1000) * 24,
+        from: hours(from0),
+        to: hours(to0),
         tip: `${dateLong(dayStart)} · asleep ${time(s.start)}–${s.end ? time(s.end) : 'now'} (${dur(sleepSeconds(s) || (sEnd - s.start) / 1000)})`,
       });
     }
     const ticks = b.events.filter(e => e.type === T.FEED).map(e => ({
-      at: (e.start - dayStart) / (DAY * 1000) * 24,
+      at: Math.min(24, (e.start - dayStart) / (DAY * 1000) * 24),
       tip: `Feed ${time(e.start)} · ${dur(feedSeconds(e))}`,
     }));
     return { label: dateLabel(dayStart), blocks, ticks };
